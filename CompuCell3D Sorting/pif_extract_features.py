@@ -251,10 +251,11 @@ def contains_isolated_cells():
 	'''
 
 	global lattice_data
+	global lattice_matrix
 	
 	clipped_lattice_data = NP.clip(lattice_data,0,1)
 
-	[_, num_labels] = skimage.morphology.label(clipped_lattice_data, return_num=True)
+	[labeled_img, num_labels] = NDI.measurements.label(clipped_lattice_data)
 
 	if num_labels > 1:
 		return True
@@ -312,6 +313,8 @@ featIndexDict['CCM'] = dict(centroid_x=CCM_start,
 	radius=CCM_start+2,
 	area=CCM_start+3,
 	perimeter=CCM_start+4)
+
+print(contains_isolated_cells())
 
 # Plot ellipsoid fit, cell-centre spherical fit, minimum perimeter polygon (MPP) fit
 if plotfits:
@@ -391,7 +394,7 @@ if plotfits:
 	
 
 # Compare features 
-if comparefits:
+# if comparefits:
 
 	# Plot centroid location
 	
