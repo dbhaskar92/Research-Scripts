@@ -18,6 +18,7 @@ from operator import itemgetter
 from optparse import OptionParser
 import matplotlib.pyplot as PLT
 from matplotlib.patches import Ellipse
+from scipy import ndimage as NDI
 
 pifFile = ''
 l_height = -1
@@ -79,12 +80,29 @@ class ExtractFeatures:
 	def __init__(self, cell_pixel_list):
 	
 		self.pix_list = cell_pixel_list
+		self.labeled_img = None
 		self.cell_area = None
 		self.cell_perimeter = None
 		self.shape_factor = None
 		self.ellipse_fvector = None
 		self.mpp_fvector = None
-		self.cc_fvector = None
+		self.ccm_fvector = None
+
+		self.cell_to_image()
+
+	def cell_to_image(self):
+		# Find x, y coordinate bounds
+		x_res = max(self.pix_list, key=itemgetter(0))[0]
+		y_res = max(self.pix_list, key=itemgetter(1))[1]
+
+		# Creating labeled_img
+		self.labeled_img = NP.zeros([x_res, y_res], dtype=NP.int_)
+		
+		for (x_pix, y_pix) in self.pix_list:
+			self.labeled_img[x_pix-1, y_pix-1] = 1
+
+		return
+
 		    
 	def area(self):
 	
@@ -133,17 +151,7 @@ class ExtractFeatures:
 		Note that the scipy definition of the integral differs slightly than wiki, so we take E(e^2) rather than E(e).
 		'''
 
-		# Find x, y coordinate bounds
-		x_res = max(self.pix_list, key=itemgetter(0))[0]
-		y_res = max(self.pix_list, key=itemgetter(1))[1]
-
-		# Creating labeled_img
-		labeled_img = NP.zeros([x_res, y_res])
-		
-		for (x_pix, y_pix) in self.pix_list:
-			labeled_img[x_pix-1, y_pix-1] = 1
-
-		props = skimage.measure.regionprops(NP.int_(labeled_img))
+		props = skimage.measure.regionprops(self.labeled_img)
 
 		centroid = props[0].centroid
 
@@ -173,26 +181,62 @@ class ExtractFeatures:
 		return
 		
 	def cell_centre_fit(self):
-	
-		cell_centre_features = []
+		'''
+		Description: Returns a list of features derived from fitting a circle (in the following order):
+		centroid_x, centroid_y, radius, perimeter, area.
+
+		This uses a least-squares estimator for the circle, using the points on the boundary of the cell.
+		These points are chosen to be at the center of the boundary pixels.
+		'''
+		
+		# First find the pixels that make up the perimeter
+		eroded_image = NDI.binary_erosion(self.labeled_img)
+		perim_image = self.labeled_img - eroded_image
+
+		# Create a list of the coordinates of the pixels (use the center of the pixels)
+		perim_image_ind = NP.where(perim_image == 1)
+		perim_image_coord = NP.array([perim_image_ind[0], perim_image_ind[1]])
+		perim_image_coord = NP.transpose(perim_image_coord)
+		perim_image_coord = perim_image_coord + 0.5
+
+		c_model = skimage.measure.CircleModel()
+		c_model.estimate(perim_image_coord)
+
+		(xc, yc, r) = c_model.params
+
+		cell_centre_features = [xc]
+		cell_centre_features.append(yc)
+		cell_centre_features.append(r)
+		cell_centre_features.append(2*NP.pi*r)
+		cell_centre_features.append(NP.pi*r**2)
 		
 		# TODO: Fit a disk, compute its radius, perimeter and goodness of fit
-		
-		self.cc_fvector = cell_centre_features
+	
+		self.ccm_fvector = cell_centre_features
 		return
 
 # Check if lattice contains isolated cells
 
 def contains_isolated_cells():
-	
+	'''
+	Description: This returns true if lattice_data contains more than one connected component
+	and false otherwise. This currently uses 1-connectivity.
+
+	Reference: http://scikit-image.org/docs/dev/api/skimage.measure.html#skimage.measure.label
+	'''
+
 	global lattice_data
 	
-	# TODO: return true iff lattice_matrix contains isolated cells
-	
-	return True
+	clipped_lattice_data = NP.clip(lattice_data,0,1)
+
+	[_, num_labels] = skimage.measure.label(clipped_lattice_data, return_num=True)
+
+	if num_labels > 1:
+		return True
+	else:
+		return False
 	
 # Compute featues for all cells
-
 featureDict = dict()
 
 for cell_id in cellDict.keys():
@@ -210,14 +254,41 @@ for cell_id in cellDict.keys():
 	for thread in thread_list:
 		thread.start()
 	
-	for thred in thread_list:
+	for thread in thread_list:
 		thread.join()
 	
 	featureDict[cell_id] = [extractor.cell_area]
-	featureDict[cell_id] = featureDict[cell_id] + extractor.ellipse_fvector
+	featureDict[cell_id] = featureDict[cell_id] + extractor.ellipse_fvector + extractor.ccm_fvector
+
+# Construct featIndexDict
+featIndexDict = dict(BASIC=None, ELLIPSE=None, CCM=None, MPP=None)
+BASIC_numfeat = 1
+ELLIPSE_numfeat = 12
+CCM_numfeat = 5
+
+ELLIPSE_start = BASIC_numfeat
+CCM_start = BASIC_numfeat + ELLIPSE_numfeat
+
+featIndexDict['BASIC'] = dict(area = 0)
+featIndexDict['ELLIPSE'] = dict(centroid_x=ELLIPSE_start, 
+	centroid_y=ELLIPSE_start+1,
+	eccentricity=ELLIPSE_start+2,
+	euler_number=ELLIPSE_start+3,
+	extent=ELLIPSE_start+4,
+	major_axis_length=ELLIPSE_start+5,
+	minor_axis_length=ELLIPSE_start+6,
+	orientation=ELLIPSE_start+7,
+	perimeter=ELLIPSE_start+8,
+	solidity=ELLIPSE_start+9,
+	area=ELLIPSE_start+10,
+	ellipse_perim=ELLIPSE_start+11)
+featIndexDict['CCM'] = dict(centroid_x=CCM_start,
+	centroid_y=CCM_start+1,
+	radius=CCM_start+2,
+	area=CCM_start+3,
+	perimeter=CCM_start+4)
 
 # Plot ellipsoid fit, cell-centre spherical fit, minimum perimeter polygon (MPP) fit
-
 if plotfits:
 
 	# Plot original cells
@@ -234,9 +305,7 @@ if plotfits:
 	# Plot ellipse fits
 	fig = PLT.figure(1)
 	ax = fig.add_subplot(111, aspect='equal')
-	ellipse_objs = dict()
 
-	# Plot ellipse fits
 	ells = [[Ellipse(xy=NP.array([featureDict[cell_id][1],featureDict[cell_id][2]]),
 		width = featureDict[cell_id][7], height = featureDict[cell_id][6],
 		angle = featureDict[cell_id][8]/(2*NP.pi)*360), cellTypeDict[cell_id]] for cell_id in cellDict.keys()]
@@ -259,8 +328,29 @@ if plotfits:
 	PLT.savefig('EllipseFit.png')
 	
 	# Plot cell-centre model (disk fit)
-	
-	# TODO
+	fig = PLT.figure(2)
+	ax = fig.add_subplot(111, aspect='equal')
+
+	circles = [[PLT.Circle((featureDict[cell_id][13],featureDict[cell_id][14]),
+		featureDict[cell_id][15]), cellTypeDict[cell_id]] for cell_id in cellDict.keys()]
+
+	for circle in circles:
+		c = circle[0]
+		ctype = circle[1]
+		ax.add_artist(c)
+		c.set_alpha(0.3)
+		if ctype == 'CellU':
+			c.set_facecolor([0,1,0])
+		elif ctype == 'CellV':
+			c.set_facecolor([1,0,0])
+		else:
+			c.set_facecolor([0,0,1])
+
+	ax.set_xlim([0,l_width])
+	ax.set_ylim([0,l_height])
+	PLT.savefig('CircleFit.png')
+
+	PLT.show()
 	
 	# Plot MPP fit
 	
