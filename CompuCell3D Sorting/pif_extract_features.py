@@ -8,31 +8,41 @@
 
 import os
 import math
+import shlex
 import string
 import threading
+import subprocess
 import scipy.special
 import skimage.measure
+import skimage.morphology
 import numpy as NP
+import matplotlib.pyplot as PLT
 from PIL import Image
 from operator import itemgetter
 from optparse import OptionParser
-import matplotlib.pyplot as PLT
 from matplotlib.patches import Ellipse
 from scipy import ndimage as NDI
 
-pifFile = ''
-l_height = -1
-l_width = -1
+pifFile = None
+xmlFile = None
+l_height, l_width = -1, -1
+plotfits, comparefits = None, None
 
 parser = OptionParser()
 parser.add_option("-i", "--input", action="store", type="string", dest="inputfile", help="path to PIF file", metavar="PIF")
+parser.add_option("-x", "--xml", action="store", type="string", dest="xmlfile", help="path to XML file", metavar="XML")
 parser.add_option("-l", "--height", action="store", type="int", dest="height", help="lattice HEIGHT", metavar="HEIGHT")
 parser.add_option("-w", "--width", action="store", type="int", dest="width", help="lattice WIDTH", metavar="WIDTH")
 parser.add_option("-p","--plot", action="store_true", dest="plotfits", help="plot fitted geometry", default=False)
+parser.add_option("-c","--compare", action="store_true", dest="comparefits", help="compare fitted geometry", default=False)
+
+# Options parsing
 
 (options, args) = parser.parse_args()
 if options.inputfile:
 	pifFile = options.inputfile
+if options.xmlfile:
+	xmlFile = options.xmlfile
 if options.height:
 	l_height = options.height
 if options.width:
@@ -41,6 +51,18 @@ if options.plotfits:
 	plotfits = True
 else:
 	plotfits = False
+if options.comparefits:
+	comparefits = True
+else:
+	comparefits = False
+	
+pifFileName = ''
+
+if os.path.isfile(pifFile):
+	pifFileName = os.path.splitext(pifFile)[0]
+else:
+	print("Error: PIF file does not exist.\n")
+	exit()
 
 # Parse PIF file	
 
@@ -91,6 +113,7 @@ class ExtractFeatures:
 		self.cell_to_image()
 
 	def cell_to_image(self):
+	
 		# Find x, y coordinate bounds
 		x_res = max(self.pix_list, key=itemgetter(0))[0]
 		y_res = max(self.pix_list, key=itemgetter(1))[1]
@@ -100,7 +123,6 @@ class ExtractFeatures:
 		
 		for (x_pix, y_pix) in self.pix_list:
 			self.labeled_img[x_pix-1, y_pix-1] = 1
-
 		return
 
 		    
@@ -202,7 +224,10 @@ class ExtractFeatures:
 		c_model = skimage.measure.CircleModel()
 		c_model.estimate(perim_image_coord)
 
-		(xc, yc, r) = c_model.params
+		if skimage.__version__ == '0.9.3':
+			(xc, yc, r) = c_model._params	
+		else:									# For newer versions
+			(xc, yc, r) = c_model.params
 
 		cell_centre_features = [xc]
 		cell_centre_features.append(yc)
@@ -229,7 +254,7 @@ def contains_isolated_cells():
 	
 	clipped_lattice_data = NP.clip(lattice_data,0,1)
 
-	[_, num_labels] = skimage.measure.label(clipped_lattice_data, return_num=True)
+	[_, num_labels] = skimage.morphology.label(clipped_lattice_data, return_num=True)
 
 	if num_labels > 1:
 		return True
@@ -296,11 +321,16 @@ if plotfits:
 	lattice_matrix = NP.ascontiguousarray(NP.flipud(NP.transpose(lattice_matrix)))
 	pilImage = Image.frombuffer('RGBA', (l_width, l_height), lattice_matrix, 'raw', 'RGBA', 0, 1)
 	pilImage = pilImage.convert('RGB')
-	pilImage.save('PIFimage.png')
+	pilImage.save(pifFileName + '_Boundary.png')
 	
 	# Plot polygonized lattice
 	
-	# TODO
+	sp = None
+	if not contains_isolated_cells():
+		dirname = os.path.dirname(os.path.abspath(__file__))
+		cmd = "python3 vectorize.py --file " + pifFile + " --size " + str(l_width) + "," + str(l_height) + " --output " + dirname
+		args = shlex.split(cmd)
+		sp = subprocess.Popen(args)
 
 	# Plot ellipse fits
 	fig = PLT.figure(1)
@@ -325,7 +355,7 @@ if plotfits:
 	
 	ax.set_xlim([0,l_width])
 	ax.set_ylim([0,l_height])
-	PLT.savefig('EllipseFit.png')
+	PLT.savefig(pifFileName + '_EllipseFit.png')
 	
 	# Plot cell-centre model (disk fit)
 	fig = PLT.figure(2)
@@ -348,15 +378,23 @@ if plotfits:
 
 	ax.set_xlim([0,l_width])
 	ax.set_ylim([0,l_height])
-	PLT.savefig('CircleFit.png')
-
+	PLT.savefig(pifFileName + '_CircleFit.png')
 	PLT.show()
 	
 	# Plot MPP fit
 	
 	# TODO
 	
+	
+	if sp is not None:
+		sp.wait()
+	
 
 # Compare features 
+if comparefits:
 
-# Plot centroid location
+	# Plot centroid location
+	
+	# Plot perimeter estimates
+	
+	# Plot area estimates
