@@ -314,8 +314,6 @@ featIndexDict['CCM'] = dict(centroid_x=CCM_start,
 	area=CCM_start+3,
 	perimeter=CCM_start+4)
 
-print(contains_isolated_cells())
-
 # Plot ellipsoid fit, cell-centre spherical fit, minimum perimeter polygon (MPP) fit
 if plotfits:
 
