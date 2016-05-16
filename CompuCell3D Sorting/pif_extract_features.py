@@ -22,6 +22,7 @@ from operator import itemgetter
 from optparse import OptionParser
 from matplotlib.patches import Ellipse
 from scipy import ndimage as NDI
+from perimeter_3pvm import perimeter_3pvm
 
 pifFile = None
 xmlFile = None
@@ -102,7 +103,8 @@ class ExtractFeatures:
 	def __init__(self, cell_pixel_list):
 	
 		self.pix_list = cell_pixel_list
-		self.labeled_img = None
+		self.bin_img = None
+		self.perim_img = None
 		self.cell_area = None
 		self.cell_perimeter = None
 		self.shape_factor = None
@@ -119,26 +121,28 @@ class ExtractFeatures:
 		y_res = max(self.pix_list, key=itemgetter(1))[1]
 
 		# Creating labeled_img
-		self.labeled_img = NP.zeros([x_res, y_res], dtype=NP.int_)
+		self.bin_img = NP.zeros([x_res, y_res], dtype=NP.int_)
 		
 		for (x_pix, y_pix) in self.pix_list:
-			self.labeled_img[x_pix-1, y_pix-1] = 1
+			self.bin_img[x_pix-1, y_pix-1] = 1
+
+		# Find the pixels that make up the perimeter
+		eroded_image = NDI.binary_erosion(self.bin_img)
+		self.perim_img = self.bin_img - eroded_image
+
 		return
 
-		    
 	def area(self):
 	
 		self.cell_area = len(self.pix_list)
 		return
 
 	def perimeter(self):
-	
 		'''
 		Description: Use three-pixel vector method to compute perimeter and shape factor
 		Reference: http://www.sciencedirect.com/science/article/pii/0308912687902458
 		'''
-		
-		# TODO: Implement method described in paper
+		self.cell_perimeter = perimeter_3pvm(self.perim_img)
 		
 		return
 		
@@ -173,7 +177,7 @@ class ExtractFeatures:
 		Note that the scipy definition of the integral differs slightly than wiki, so we take E(e^2) rather than E(e).
 		'''
 
-		props = skimage.measure.regionprops(self.labeled_img)
+		props = skimage.measure.regionprops(self.bin_img)
 
 		centroid = props[0].centroid
 
@@ -213,10 +217,10 @@ class ExtractFeatures:
 		
 		# First find the pixels that make up the perimeter
 		eroded_image = NDI.binary_erosion(self.labeled_img)
-		perim_image = self.labeled_img - eroded_image
+		perim_image = self.bin_img - eroded_image
 
 		# Create a list of the coordinates of the pixels (use the center of the pixels)
-		perim_image_ind = NP.where(perim_image == 1)
+		perim_image_ind = NP.where(self.perim_img == 1)
 		perim_image_coord = NP.array([perim_image_ind[0], perim_image_ind[1]])
 		perim_image_coord = NP.transpose(perim_image_coord)
 		perim_image_coord = perim_image_coord + 0.5
@@ -283,19 +287,21 @@ for cell_id in cellDict.keys():
 	for thread in thread_list:
 		thread.join()
 	
-	featureDict[cell_id] = [extractor.cell_area]
+	featureDict[cell_id] = [extractor.cell_area, extractor.cell_perimeter, extractor.shape_factor]
 	featureDict[cell_id] = featureDict[cell_id] + extractor.ellipse_fvector + extractor.ccm_fvector
 
 # Construct featIndexDict
 featIndexDict = dict(BASIC=None, ELLIPSE=None, CCM=None, MPP=None)
-BASIC_numfeat = 1
+BASIC_numfeat = 3
 ELLIPSE_numfeat = 12
 CCM_numfeat = 5
 
 ELLIPSE_start = BASIC_numfeat
 CCM_start = BASIC_numfeat + ELLIPSE_numfeat
 
-featIndexDict['BASIC'] = dict(area = 0)
+featIndexDict['BASIC'] = dict(area = 0,
+	perimeter=1,
+	shape_factor=2)
 featIndexDict['ELLIPSE'] = dict(centroid_x=ELLIPSE_start, 
 	centroid_y=ELLIPSE_start+1,
 	eccentricity=ELLIPSE_start+2,
