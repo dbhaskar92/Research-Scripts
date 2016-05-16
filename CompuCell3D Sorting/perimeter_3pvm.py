@@ -1,12 +1,10 @@
 #!/usr/bin/env python
-
 #
-# Last modified: 15 May 2016
+# Last modified: 16 May 2016
 # Author: Darrick Lee <y.l.darrick@gmail.com>
 # Description: This function uses the 3-pixel vector method described in the paper
 # 	below to calculate the perimeter of binary image.
 # Reference: http://www.sciencedirect.com/science/article/pii/0308912687902458
-#
 #
 # NOTE: If the total number of pixels in perim_img is odd, the perimeter MAY be off by +/- 1
 #	This still needs to be checked more thoroughly, but this function should be accurate
@@ -17,7 +15,6 @@ from scipy import ndimage as NDI
 
 def perimeter_3pvm(perim_img):
 	# Calculate (clockwise) chain code (convention in paper)
-
 	# Initialize potential movement directions (corresponding to chain code convention in paper)
 	dir_y = NP.array([0, -1, -1, -1, 0, 1, 1, 1])
 	dir_x = NP.array([1, 1, 0, -1, -1, -1, 0, 1])
@@ -30,22 +27,17 @@ def perimeter_3pvm(perim_img):
 	leftmost_pix = NP.where(perim_img_ind[1] == leftmost_ind)[0]
 	uppermost_ind = max(perim_img_ind[0][leftmost_pix])
 
-	cur_y = prev_y = first_y = uppermost_ind
-	cur_x = prev_x = first_x = leftmost_ind
+	cur_y = first_y = uppermost_ind
+	cur_x = first_x = leftmost_ind
 
-	# Calculate the first element in the chain code
-	if perim_img[cur_y+1,cur_x+1] == 1:
-		chain_code = [7]
-		cur_y = cur_y+1
-		cur_x = cur_x+1
-	elif perim_img[cur_y, cur_x+1] == 1:
-		chain_code = [0]
-		cur_y = cur_y
-		cur_x = cur_x+1
-	elif perim_img[cur_y-1, cur_x+1] == 1:
-		chain_code = [1]
-		cur_y = cur_y-1
-		cur_x = cur_x+1
+	bordering_values = perim_img[cur_y + dir_y, cur_x + dir_x]
+	possible_directions = NP.where(bordering_values==1)[0]
+
+	next_dir = NP.sort(NP.mod(possible_directions-6,8))[0] + 6
+	chain_code = [NP.mod(next_dir,8)]
+
+	cur_y = cur_y + dir_y[chain_code[-1]]
+	cur_x = cur_x + dir_x[chain_code[-1]]
 
 	# Continue to append to chain code until we reach the beginning
 	while [cur_y, cur_x] != [first_y, first_x]:
@@ -68,8 +60,6 @@ def perimeter_3pvm(perim_img):
 
 		cur_y = cur_y + dir_y[chain_code[-1]]
 		cur_x = cur_x + dir_x[chain_code[-1]]
-
-	print(chain_code)
 
 	# Define l_b, D, and delta_l matrices
 	def D(i, n):
@@ -193,7 +183,7 @@ def perimeter_3pvm(perim_img):
 			D2_prev = D2_cur
 
 	# D2_prev and g_type is from the iteration of for loop
-	Delta_D =NP.mod(D1_first - D2_prev + 16, 16) + 1
+	Delta_D = NP.mod(D1_first - D2_prev + 16, 16) + 1
 	perimeter = perimeter + delta_l[g_type_first-1][Delta_D-1]
 
 	if isodd:
