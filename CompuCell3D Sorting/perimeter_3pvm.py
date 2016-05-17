@@ -191,9 +191,5 @@ def perimeter_3pvm(perim_img):
 			perimeter = perimeter + 1
 		else:
 			perimeter = perimeter + NP.sqrt(2)
-	else:
-		# D2_prev and g_type is from the iteration of for loop
-		Delta_D =NP.mod(D1_first - D2_prev + 16, 16) + 1
-		perimeter = perimeter + delta_l[g_type-1][Delta_D-1]
 
 	return perimeter
