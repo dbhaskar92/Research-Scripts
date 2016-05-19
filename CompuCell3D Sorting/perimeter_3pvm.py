@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 #
-# Last modified: 16 May 2016
+# Last modified: 18 May 2016
 # Author: Darrick Lee <y.l.darrick@gmail.com>
 # Description: This function uses the 3-pixel vector method described in the paper
 # 	below to calculate the perimeter of binary image.
+#
+#	In addition, it returns an polygon that is approximately the one used for the 3pv-method
+#	along with the perimeter of this approximate polygon.
+#
 # Reference: http://www.sciencedirect.com/science/article/pii/0308912687902458
 #
 # NOTE: If the total number of pixels in perim_img is odd, the perimeter MAY be off by +/- 1
@@ -12,6 +16,188 @@
 
 import numpy as NP
 from scipy import ndimage as NDI
+
+def chain_pair_props(cur_pt, c1, c2):
+	'''
+	Description: This function calculates and returns properties of the chain pair.
+	Specifically, it returns the pattern type (p_type), the group type (g_type),
+	and the points to add to the overall polygon. The coordinate of the current pixel
+	is assumed to be at the bottom left corner.
+
+	NOTE: As with the rest of the code here, coordinates are labelled (y,x).
+
+	Output: next_pt, p_type, g_type, n, poly_pts
+	'''
+	# The next two lists are to index the corners of pixels
+	# 0 - bottom left
+	# 1 - upper left
+	# 2 - upper right
+	# 3 - bottom right
+	c = NP.array([[0,0],[1,0],[1,1],[0,1]])
+
+	# Directions corresponding to chain codes
+	d = NP.array([[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1],[1,0],[1,1]])
+
+	n = c1//2
+	poly_pts = []
+
+	# p_type = pattern type
+	# g_type = group type
+	if NP.mod(c1,2)==0:
+		# Even c1 cases
+		if c2 == 2*n+1:
+			p_type = 1
+			g_type = 1
+			
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+			cur_pt = cur_pt + d[c1] + d[c2]
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+
+		elif c2 == NP.mod(2*n+7,8):
+			p_type = 3
+			g_type = 2
+
+			poly_pts.append(cur_pt + c[NP.mod(1+n,4)])
+			cur_pt = cur_pt + d[c1] + d[c2]
+			poly_pts.append(cur_pt + c[NP.mod(1+n,4)])
+
+		elif c2 == 2*n:
+			p_type = 5
+			g_type = 3
+
+			poly_pts.append(cur_pt + c[NP.mod(1+n,4)])
+			cur_pt = cur_pt + d[c1] + d[c2]
+			poly_pts.append(cur_pt + c[NP.mod(1+n,4)])
+
+		elif c2 == NP.mod(2*n+2,8):
+			p_type = 6
+			g_type = 3
+
+			poly_pts.append(cur_pt + c[NP.mod(1+n,4)])
+			cur_pt = cur_pt + d[c1]
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+			cur_pt = cur_pt + d[c2]
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+
+		elif c2 == NP.mod(2*n+3,8):
+			p_type = 7
+			g_type = 3
+
+			poly_pts.append(cur_pt + c[NP.mod(1+n,4)])
+			cur_pt = cur_pt + d[c1]
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+			poly_pts.append(cur_pt + c[NP.mod(3+n,4)])
+			cur_pt = cur_pt + d[c2]
+			poly_pts.append(cur_pt + c[NP.mod(3+n,4)])
+
+		elif c2 == NP.mod(2*n+4,8):
+			p_type = 8
+			g_type = 3
+
+			poly_pts.append(cur_pt + c[NP.mod(1+n,4)])
+			cur_pt = cur_pt + d[c1]
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+			poly_pts.append(cur_pt + c[NP.mod(3+n,4)])
+			cur_pt = cur_pt + d[c2]
+			poly_pts.append(cur_pt + c[NP.mod(3+n,4)])
+
+	else:
+		# Odd c1 cases
+		if c2 == 2*n:
+			p_type = 2
+			g_type = 1
+
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+			cur_pt = cur_pt + d[c1] + d[c2]
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+
+		elif c2 == NP.mod(2*n+2,8):
+			p_type = 4
+			g_type = 2
+
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+			cur_pt = cur_pt + d[c1] + d[c2]
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+
+		elif c2 == NP.mod(2*n+7,8):
+			p_type = 9
+			g_type = 4
+
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)] + 0.5*d[c1])
+			cur_pt = cur_pt + d[c1] + d[c2]
+			poly_pts.append(cur_pt + c[NP.mod(1+n,4)])
+
+		elif c2 == 2*n+1:
+			p_type = 10
+			g_type = 4
+
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+			cur_pt = cur_pt + d[c1] + d[c2]
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+
+		elif c2 == NP.mod(2*n+3,8):
+			p_type = 11
+			g_type = 4
+
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+			cur_pt = cur_pt + d[c1]
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+			poly_pts.append(cur_pt + c[NP.mod(3+n,4)])
+			cur_pt = cur_pt + d[c2]
+			poly_pts.append(cur_pt + c[NP.mod(3+n,4)])
+
+		elif c2 == NP.mod(2*n+4,8):
+			p_type = 12
+			g_type = 4
+
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+			cur_pt = cur_pt + d[c1]
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+			poly_pts.append(cur_pt + c[NP.mod(3+n,4)])
+			cur_pt = cur_pt + d[c2]
+			poly_pts.append(cur_pt + c[NP.mod(3+n,4)])
+
+		elif c2 == NP.mod(2*n+5,8):
+			p_type = 13
+			g_type = 4
+
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+			cur_pt = cur_pt + d[c1]
+			poly_pts.append(cur_pt + c[NP.mod(2+n,4)])
+			poly_pts.append(cur_pt + c[NP.mod(3+n,4)])
+			poly_pts.append(cur_pt + c[NP.mod(0+n,4)])
+			cur_pt = cur_pt + d[c2]
+			poly_pts.append(cur_pt + c[NP.mod(0+n,4)])
+
+	return cur_pt, p_type, g_type, n, poly_pts
+
+def poly_pts_refine(poly_pts):
+	'''
+	Description: This function refines the polygon points. Directly using the points
+	derived from the 3pv method will result in intersections. This function goes through
+	the edge vectors in poly_pts, and finds adjacent edge vectors that form an angle larger
+	than 90 degrees, and hence a negative dot product. It removes the point common to these
+	two vectors.
+	'''
+	np_poly_pts = NP.array(poly_pts)
+	num_pts = len(poly_pts)
+
+	poly_direc = np_poly_pts[1:] - np_poly_pts[:-1]
+
+	poly_dotprod = [NP.dot(poly_direc[n+1],poly_direc[n]) for n in range(num_pts-2)]
+
+	poly_negdot = list(NP.array(poly_dotprod)<0)
+	prevneg = False # Usually negative dot products will come in pairs, we only need to consider one
+
+	for i, negdot in reversed(list(enumerate(poly_negdot))):
+		if negdot and not prevneg:
+			del poly_pts[i]
+			prevneg = True
+		else:
+			prevneg = False
+
+	return poly_pts
 
 def perimeter_3pvm(perim_img):
 	# Calculate (clockwise) chain code (convention in paper)
@@ -117,55 +303,14 @@ def perimeter_3pvm(perim_img):
 		chain_pair = zip(chain_code[0::2],chain_code[1::2])
 
 	perimeter = 0
+	cur_pt = NP.array([first_y, first_x])
+	poly_pts = []
+	delta_l_seq = []
 
 	for c1, c2 in chain_pair:
-		n = c1//2
 
-		# p_type = pattern type
-		# g_type = group type
-		if NP.mod(c1,2)==0:
-			# Even c1 cases
-			if c2 == 2*n+1:
-				p_type = 1
-				g_type = 1
-			elif c2 == NP.mod(2*n+7,8):
-				p_type = 3
-				g_type = 2
-			elif c2 == 2*n:
-				p_type = 5
-				g_type = 3
-			elif c2 == NP.mod(2*n+2,8):
-				p_type = 6
-				g_type = 3
-			elif c2 == NP.mod(2*n+3,8):
-				p_type = 7
-				g_type = 3
-			elif c2 == NP.mod(2*n+4,8):
-				p_type = 8
-				g_type  = 3
-		else:
-			# Odd c1 cases
-			if c2 == 2*n:
-				p_type = 2
-				g_type = 1
-			elif c2 == NP.mod(2*n+2,8):
-				p_type = 4
-				g_type = 2
-			elif c2 == NP.mod(2*n+7,8):
-				p_type = 9
-				g_type = 4
-			elif c2 == 2*n+1:
-				p_type = 10
-				g_type = 4
-			elif c2 == NP.mod(2*n+3,8):
-				p_type = 11
-				g_type = 4
-			elif c2 == NP.mod(2*n+4,8):
-				p_type = 12
-				g_type = 4
-			elif c2 == NP.mod(2*n+5,8):
-				p_type = 13
-				g_type = 4
+		cur_pt, p_type, g_type, n, cur_poly_pts = chain_pair_props(cur_pt, c1, c2)
+		poly_pts = poly_pts + cur_poly_pts
 
 		if perimeter == 0:
 			perimeter = l_b[p_type-1]
@@ -180,6 +325,8 @@ def perimeter_3pvm(perim_img):
 			Delta_D =NP.mod(D1_cur - D2_prev + 16, 16) + 1
 
 			perimeter = perimeter + l_b[p_type-1] + delta_l[g_type-1][Delta_D-1]
+
+			delta_l_seq.append(delta_l[g_type-1][Delta_D-1])
 			D2_prev = D2_cur
 
 	# D2_prev and g_type is from the iteration of for loop
@@ -191,9 +338,17 @@ def perimeter_3pvm(perim_img):
 			perimeter = perimeter + 1
 		else:
 			perimeter = perimeter + NP.sqrt(2)
-	else:
-		# D2_prev and g_type is from the iteration of for loop
-		Delta_D =NP.mod(D1_first - D2_prev + 16, 16) + 1
-		perimeter = perimeter + delta_l[g_type-1][Delta_D-1]
 
-	return perimeter
+	# Refine the poly_pts
+	poly_pts.append(poly_pts[0]) # Add the first point back into the array
+	poly_pts = poly_pts_refine(poly_pts)
+
+	# Calculate the perimeter to check if it's the same as the other perimeter
+	np_poly_pts = NP.array(poly_pts)
+	poly_direc = np_poly_pts[1:] - np_poly_pts[:-1]
+	poly_perimeter = 0
+
+	for vec in poly_direc:
+		poly_perimeter = poly_perimeter + NP.linalg.norm(vec)
+
+	return perimeter, poly_perimeter, poly_pts
