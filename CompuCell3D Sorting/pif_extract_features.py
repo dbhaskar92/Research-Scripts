@@ -21,7 +21,7 @@ import matplotlib.pyplot as PLT
 from PIL import Image
 from operator import itemgetter
 from optparse import OptionParser
-from matplotlib.patches import Ellipse
+from matplotlib.patches import Ellipse, Polygon
 from scipy import ndimage as NDI
 from perimeter_3pvm import perimeter_3pvm
 
@@ -113,10 +113,13 @@ class ExtractFeatures:
 		self.bin_img = None
 		self.perim_img = None
 		self.perim_coord = None # Coordinates of the perimeter (center of pixel)
-		self.perim_dp = None # Coordinates of approximate perimeter (Douglas-Peucker)
+		self.perim_coord_dp = None # Coordinates of approximate perimeter (Douglas-Peucker)
+		self.perim_coord_poly = None # Coordinates of perimeter (derived from 3pv)
 		self.cell_area = None
-		self.cell_perimeter = None
-		self.naive_perimeter = None 
+		self.poly_area = None # Area of polygon derived from 3pv
+		self.cell_perimeter = None # 3pv method
+		self.naive_perimeter = None # 1 sqrt 2 method
+		self.poly_perimeter = None # Perimeter of polygon derived from 3pv
 		self.shape_factor = None
 		self.ellipse_fvector = None
 		self.mpp_fvector = None
@@ -148,20 +151,33 @@ class ExtractFeatures:
 
 		return
 
-	def area(self):
-	
-		self.cell_area = len(self.pix_list)
-		return
-
-	def perimeter(self):
+	def basic_props(self):
 		'''
-		Description: Use three-pixel vector method to compute perimeter and shape factor
+		Description: Calculates the perimeter and area using basic methods. For perimeter,
+		we use the 3pv, 1 sqrt2 method, and look at the 3pv-polygon perimeter. For area,
+		we use pixel counting, and look at the 3pv-polygon area.
+
+		For 3pv perimeter: Use three-pixel vector method to compute perimeter and shape factor
 		Reference: http://www.sciencedirect.com/science/article/pii/0308912687902458
 		'''
-		self.cell_perimeter = perimeter_3pvm(self.perim_img)
+		# Perimeter: 3pv and polygon perimeter (polygon from 3pv)
+		self.cell_perimeter, self.poly_perimeter, self.perim_coord_poly = perimeter_3pvm(self.perim_img)
 
+		# Perimeter: 1 sqrt2 (function from regionprops)
 		props = skimage.measure.regionprops(self.bin_img)
 		self.naive_perimeter = props[0].perimeter
+
+		# Area: Pixel Counting
+		self.cell_area = len(self.pix_list)	
+
+		# Area: Polygon area (from 3pv polygon)
+		# Extract x and y coordinates
+		# We subtract 0.5 because PLT.imshow() shows coordinates as the centers of pixels
+		# Using the shoelace formula: https://en.wikipedia.org/wiki/Shoelace_formula
+		YY = NP.array([self.perim_coord_poly[y][0] - 0.5 for y in range(len(self.perim_coord_poly))])
+		XX = NP.array([self.perim_coord_poly[x][1] - 0.5 for x in range(len(self.perim_coord_poly))])
+
+		self.poly_area = 0.5*NP.abs(NP.dot(XX,NP.roll(YY,1))-NP.dot(YY,NP.roll(XX,1)))
 		
 		return
 		
@@ -274,6 +290,7 @@ def contains_isolated_cells():
 	
 # Compute featues for all cells
 featureDict = dict()
+polyPtDict = dict()
 
 for cell_id in cellDict.keys():
 
@@ -281,9 +298,8 @@ for cell_id in cellDict.keys():
 
 	thread_list = []
 
-	thread_list.append(threading.Thread(target=extractor.area(), args=(), kwargs={}))
+	thread_list.append(threading.Thread(target=extractor.basic_props(), args=(), kwargs={}))
 	thread_list.append(threading.Thread(target=extractor.ellipse_props(), args=(), kwargs={}))
-	thread_list.append(threading.Thread(target=extractor.perimeter(), args=(), kwargs={}))
 	thread_list.append(threading.Thread(target=extractor.minimum_perimeter_polygon(), args=(), kwargs={}))
 	thread_list.append(threading.Thread(target=extractor.cell_centre_fit(), args=(), kwargs={}))
 	
@@ -293,25 +309,37 @@ for cell_id in cellDict.keys():
 	for thread in thread_list:
 		thread.join()
 	
-	featureDict[cell_id] = [extractor.cell_area, extractor.naive_perimeter, extractor.shape_factor, extractor.cell_perimeter,]
+	featureDict[cell_id] = [extractor.cell_area, extractor.naive_perimeter, extractor.shape_factor]
+	featureDict[cell_id] = featureDict[cell_id] +  [extractor.cell_perimeter]
+	featureDict[cell_id] = featureDict[cell_id] + [extractor.poly_perimeter, extractor.poly_area]
 	featureDict[cell_id] = featureDict[cell_id] + extractor.ellipse_fvector + extractor.ccm_fvector
 
+	polyPtDict[cell_id] = extractor.perim_coord_poly
+
 # Construct featIndexDict
-featIndexDict = dict(BASIC=None, ELLIPSE=None, CCM=None, TPV=None, MPP=None)
+featIndexDict = dict(BASIC=None, ELLIPSE=None, CCM=None, TPV=None, MPP=None, POLY=None)
 BASIC_numfeat = 3
 TPV_numfeat = 1
+POLY_numfeat = 2
 ELLIPSE_numfeat = 11
 CCM_numfeat = 5
 
 TPV_start = BASIC_numfeat
-ELLIPSE_start = TPV_start + TPV_numfeat
+POLY_start = TPV_start + TPV_numfeat
+ELLIPSE_start = POLY_start + POLY_numfeat
 CCM_start = ELLIPSE_start + ELLIPSE_numfeat
 
-featIndexDict['BASIC'] = dict(area = 0,
+featIndexDict['BASIC'] = dict(
+	area = 0,
 	perimeter=1,
 	shape_factor=2)
-featIndexDict['TPV'] = dict(perimeter=TPV_start)
-featIndexDict['ELLIPSE'] = dict(centroid_x=ELLIPSE_start, 
+featIndexDict['TPV'] = dict(
+	perimeter=TPV_start)
+featIndexDict['POLY'] = dict(
+	perimeter=POLY_start,
+	area=POLY_start+1)
+featIndexDict['ELLIPSE'] = dict(
+	centroid_x=ELLIPSE_start, 
 	centroid_y=ELLIPSE_start+1,
 	eccentricity=ELLIPSE_start+2,
 	euler_number=ELLIPSE_start+3,
@@ -322,7 +350,8 @@ featIndexDict['ELLIPSE'] = dict(centroid_x=ELLIPSE_start,
 	solidity=ELLIPSE_start+8,
 	area=ELLIPSE_start+9,
 	perimeter=ELLIPSE_start+10)
-featIndexDict['CCM'] = dict(centroid_x=CCM_start,
+featIndexDict['CCM'] = dict(
+	centroid_x=CCM_start,
 	centroid_y=CCM_start+1,
 	radius=CCM_start+2,
 	perimeter=CCM_start+3,
@@ -340,12 +369,12 @@ if plotfits:
 	
 	# Plot polygonized lattice
 	
-	sp = None
-	if not contains_isolated_cells():
-		dirname = os.path.dirname(os.path.abspath(__file__))
-		cmd = "python3 vectorize.py --file " + pifFile + " --size " + str(l_width) + "," + str(l_height) + " --output " + dirname
-		args = shlex.split(cmd)
-		sp = subprocess.Popen(args)
+	# sp = None
+	# if not contains_isolated_cells():
+	# 	dirname = os.path.dirname(os.path.abspath(__file__))
+	# 	cmd = "python3 vectorize.py --file " + pifFile + " --size " + str(l_width) + "," + str(l_height) + " --output " + dirname
+	# 	args = shlex.split(cmd)
+	# 	sp = subprocess.Popen(args)
 
 	# Plot ellipse fits
 	fig = PLT.figure(1)
@@ -399,16 +428,38 @@ if plotfits:
 	ax.set_xlim([0,l_width])
 	ax.set_ylim([0,l_height])
 	PLT.savefig(pifFileName + '_CircleFit.png')
+
+	# Plot 3pv-polygon model
+	fig = PLT.figure(3)
+	ax = fig.add_subplot(111, aspect='equal')
+
+	polys = [[Polygon(NP.array(polyPtDict[cell_id])),
+		cellTypeDict[cell_id]] for cell_id in cellDict.keys()]
+
+	for poly in polys:
+		p = poly[0]
+		ctype = poly[1]
+		ax.add_artist(p)
+		p.set_alpha(0.3)
+		if ctype == 'CellU':
+			p.set_facecolor([0,1,0])
+		elif ctype == 'CellV':
+			p.set_facecolor([1,0,0])
+		else:
+			p.set_facecolor([0,0,1])
+
+	ax.set_xlim([0,l_width])
+	ax.set_ylim([0,l_height])
+	PLT.savefig(pifFileName + '_3pvPolyFit.png')
 	PLT.show()
-	
+
 	# Plot MPP fit
 	
 	# TODO
 	
-	if sp is not None:
-		sp.wait()
+	# if sp is not None:
+	# 	sp.wait()
 	
-
 # Compare features 
 if comparefits:
 	# Initialize data vectors
@@ -418,11 +469,13 @@ if comparefits:
 	perim_ellipse = []
 	perim_circle = []
 	perim_3pv = []
+	perim_poly = []
 	perim_xml = []
 
 	area_ellipse = []
 	area_circle = []
 	area_basic = []
+	area_poly = []
 	area_xml = []
 
 	# Prepare XML file
@@ -442,10 +495,12 @@ if comparefits:
 		perim_ellipse.append(featureDict[cell_id][featIndexDict['ELLIPSE']['perimeter']])
 		perim_circle.append(featureDict[cell_id][featIndexDict['CCM']['perimeter']])
 		perim_3pv.append(featureDict[cell_id][featIndexDict['TPV']['perimeter']])
+		perim_poly.append(featureDict[cell_id][featIndexDict['POLY']['perimeter']])
 
 		area_ellipse.append(featureDict[cell_id][featIndexDict['ELLIPSE']['area']])
 		area_circle.append(featureDict[cell_id][featIndexDict['CCM']['area']])
 		area_basic.append(featureDict[cell_id][featIndexDict['BASIC']['area']])
+		area_poly.append(featureDict[cell_id][featIndexDict['POLY']['area']])
 
 		if plotXML:
 			perim_xml.append(cells[cell_id].get('perimeter'))
@@ -457,11 +512,13 @@ if comparefits:
 	perim_1sqrt2 = NP.array(perim_1sqrt2)[perim_reorder_ind]
 	perim_ellispe = NP.array(perim_ellipse)[perim_reorder_ind]
 	perim_circle = NP.array(perim_circle)[perim_reorder_ind]
+	perim_poly = NP.array(perim_poly)[perim_reorder_ind]
 	perim_3pv = NP.array(perim_3pv)[perim_reorder_ind]
 
 	area_reorder_ind = NP.argsort(area_basic)
 	area_ellipse = NP.array(area_ellipse)[area_reorder_ind]
 	area_circle = NP.array(area_circle)[area_reorder_ind]
+	area_poly = NP.array(area_poly)[area_reorder_ind]
 	area_basic = NP.array(area_circle)[area_reorder_ind]
 
 	if plotXML:
@@ -476,16 +533,17 @@ if comparefits:
 		PLT.plot(cell_range, perim_xml)
 	PLT.plot(cell_range, perim_ellipse)
 	PLT.plot(cell_range, perim_circle)
+	PLT.plot(cell_range, perim_poly)
 	PLT.plot(cell_range, perim_1sqrt2)
 	PLT.plot(cell_range, perim_3pv)
 
-	PLT.xlabel('Cell ID')
+	PLT.xlabel('Cell (arbitrary)')
 	PLT.ylabel('Perimeter')
-	PLT.title('Comparison of Perimeter vs. Cell ID')
+	PLT.title('Comparison of Perimeter vs. Cell')
 	if plotXML:
-		PLT.legend(["xml", "Ellipse fit", "CCM fit", "1, sqrt(2) method", "3pv method"], loc=2)
+		PLT.legend(["xml", "Ellipse fit", "CCM fit", "Poly fit", "1, sqrt(2) method", "3pv method"], loc=2)
 	else:
-		PLT.legend(["Ellipse fit", "CCM fit", "1, sqrt(2) method", "3pv method"], loc=2)	
+		PLT.legend(["Ellipse fit", "CCM fit", "Poly fit", "1, sqrt(2) method", "3pv method"], loc=2)	
 	PLT.savefig(pifFileName + '_PerimCompare.png', bbox_inches='tight', dpi = 400)
 
 	PLT.figure(2)
@@ -493,13 +551,14 @@ if comparefits:
 		PLT.plot(cell_range, area_xml)
 	PLT.plot(cell_range, area_ellipse)
 	PLT.plot(cell_range, area_circle)
+	PLT.plot(cell_range, area_poly)
 	PLT.plot(cell_range, area_basic)
 
-	PLT.xlabel('Cell ID')
+	PLT.xlabel('Cell (arbitrary)')
 	PLT.ylabel('Area')
-	PLT.title('Comparison of Area vs. Cell ID')
+	PLT.title('Comparison of Area vs. Cell')
 	if plotXML:
-		PLT.legend([ "xml", "Ellipse fit", "CCM fit", "Pixel counting"], loc=2)
+		PLT.legend([ "xml", "Ellipse fit", "CCM fit", "Poly fit", "Pixel counting"], loc=2)
 	else:
-		PLT.legend([ "Ellipse fit", "CCM fit", "Pixel counting"], loc=2)		
+		PLT.legend([ "Ellipse fit", "CCM fit", "Poly fit", "Pixel counting"], loc=2)		
 	PLT.savefig(pifFileName + '_AreaCompare.png', bbox_inches='tight', dpi = 400)
