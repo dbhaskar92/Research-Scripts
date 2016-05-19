@@ -180,6 +180,13 @@ def poly_pts_refine(poly_pts):
 	than 90 degrees, and hence a negative dot product. It removes the point common to these
 	two vectors.
 	'''
+	# Delete repeated points
+	for i, pt in reversed(list(enumerate(poly_pts))):
+		if i == len(poly_pts)-1:
+			continue
+		elif NP.all(pt == poly_pts[i+1]):
+			del poly_pts[i+1]
+
 	np_poly_pts = NP.array(poly_pts)
 	num_pts = len(poly_pts)
 
@@ -199,7 +206,12 @@ def poly_pts_refine(poly_pts):
 
 	return poly_pts
 
-def perimeter_3pvm(perim_img):
+def calculate_chain_code(perim_img):
+	'''
+	Description: This function calculates the chain code of the binary perimeter image.
+	This function begins on the left-most, upper-most pixel and moves clockwise. The numbering
+	follows the convention given in the 3pv paper.
+	'''
 	# Calculate (clockwise) chain code (convention in paper)
 	# Initialize potential movement directions (corresponding to chain code convention in paper)
 	dir_y = NP.array([0, -1, -1, -1, 0, 1, 1, 1])
@@ -246,6 +258,13 @@ def perimeter_3pvm(perim_img):
 
 		cur_y = cur_y + dir_y[chain_code[-1]]
 		cur_x = cur_x + dir_x[chain_code[-1]]
+
+	return chain_code, first_y, first_x
+
+
+def perimeter_3pvm(perim_img):
+	
+	chain_code, first_y, first_x = calculate_chain_code(perim_img)
 
 	# Define l_b, D, and delta_l matrices
 	def D(i, n):
@@ -344,8 +363,8 @@ def perimeter_3pvm(perim_img):
 	poly_pts = poly_pts_refine(poly_pts)
 
 	# Calculate the perimeter to check if it's the same as the other perimeter
-	np_poly_pts = NP.array(poly_pts)
-	poly_direc = np_poly_pts[1:] - np_poly_pts[:-1]
+	poly_pts = NP.array(poly_pts) - 0.5 # Minus 0.5 because pixels are centered on integers
+	poly_direc = poly_pts[1:] - poly_pts[:-1]
 	poly_perimeter = 0
 
 	for vec in poly_direc:
