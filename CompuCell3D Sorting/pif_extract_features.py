@@ -7,6 +7,7 @@
 # 
 
 import os
+import sys
 import math
 import shlex
 import string
@@ -23,12 +24,51 @@ from operator import itemgetter
 from optparse import OptionParser
 from matplotlib.patches import Ellipse, Polygon
 from scipy import ndimage as NDI
+from scipy import interpolate
 from perimeter_3pvm import perimeter_3pvm
+
+###################################################################
+
+def testFunction(extractor):
+	# This function is used to test new features
+
+	extractor.basic_props()
+
+	perim_img_ind = NP.where(extractor.perim_img == 1)
+
+	xlim_min = min(perim_img_ind[1])-2
+	xlim_max = max(perim_img_ind[1])+2
+
+	ylim_min = min(perim_img_ind[0])-2
+	ylim_max = max(perim_img_ind[0])+2
+
+	fig = PLT.figure(1)
+	ax = fig.add_subplot(111, aspect='equal')
+
+	U = NP.linspace(0,1.01,100)
+	OUT = interpolate.splev(U, extractor.spl_poly)
+	OUT = NP.flipud(OUT)
+
+	PLT.imshow(extractor.perim_img, interpolation='nearest', cmap='Greys')
+	PLT.plot(extractor.perim_coord_poly[:,1], extractor.perim_coord_poly[:,0], linewidth=3, color='g')
+	PLT.plot(OUT[0], OUT[1], linewidth=3, color='r')
+
+	# PLT.plot(extractor.perim_coord_eroded[:,1], extractor.perim_coord_eroded[:,0], linewidth=3, color='r')
+	# PLT.plot(extractor.perim_coord_dp[:,1], extractor.perim_coord_dp[:,0], linewidth=3, color='m')
+
+	PLT.legend(['Poly','Spline','D-P'], loc=2)
+
+	ax.set_xlim([xlim_min, xlim_max])
+	ax.set_ylim([ylim_min, ylim_max])
+	PLT.savefig(pifFileName + '_SplineFits.png', bbox_inches='tight', dpi = 400)
+
+###################################################################
 
 pifFile = None
 xmlFile = None
 l_height, l_width = -1, -1
 xmlTime = -1
+testCell = -1
 plotfits, comparefits = None, None
 
 parser = OptionParser()
@@ -39,9 +79,9 @@ parser.add_option("-w", "--width", action="store", type="int", dest="width", hel
 parser.add_option("-p","--plot", action="store_true", dest="plotfits", help="plot fitted geometry", default=False)
 parser.add_option("-c","--compare", action="store_true", dest="comparefits", help="compare fitted geometry", default=False)
 parser.add_option("-t","--time", action="store", type="int", dest="time", help="time in XML file to compare", metavar="TIME")
+parser.add_option("-T","--test", action="store", type="int", dest="testcell", help="runs the test code on specified cell")
 
 # Options parsing
-
 (options, args) = parser.parse_args()
 if options.inputfile:
 	pifFile = options.inputfile
@@ -61,6 +101,8 @@ else:
 	comparefits = False
 if options.time is not None:
 	xmlTime = options.time
+if options.testcell:
+	testCell = options.testcell
 
 plotXML = xmlFile is not None and xmlTime != -1
 
@@ -110,20 +152,32 @@ class ExtractFeatures:
 	def __init__(self, cell_pixel_list):
 	
 		self.pix_list = cell_pixel_list
-		self.bin_img = None
-		self.perim_img = None
-		self.perim_coord = None # Coordinates of the perimeter (center of pixel)
+
+		self.cell_img = None # Binary image of full cell
+		self.perim_img = None # Binary image of cell perimeter
+		self.eroded_img = None # Binary image of eroded cell perimeter
+
+		self.perim_coord = None # Coordinates of the cell perimeter pixels
 		self.perim_coord_dp = None # Coordinates of approximate perimeter (Douglas-Peucker)
-		self.perim_coord_poly = None # Coordinates of perimeter (derived from 3pv)
-		self.cell_area = None
-		self.poly_area = None # Area of polygon derived from 3pv
-		self.cell_perimeter = None # 3pv method
-		self.naive_perimeter = None # 1 sqrt 2 method
-		self.poly_perimeter = None # Perimeter of polygon derived from 3pv
+		self.perim_coord_poly = None # Coordinates of polygon (derived from 3pv)
+		self.perim_coord_eroded = None # Coordinates of eroded polygon
+
+		self.area_cell = None # Area of cell by pixel counting
+		self.area_poly = None # Area of polygon derived from 3pv
+		self.area_eroded = None # Area of eroded polygon
+
+		self.perim_3pv = None # Perimeter of cell using 3pv method
+		self.perim_1sqrt2 = None # 1 sqrt 2 method
+		self.perim_poly = None # Perimeter of polygon derived from 3pv
+		self.perim_eroded = None # Perimeter of polygon of eroded cell
+
+		self.equiv_diameter = None # The equivalent diameter of a circle with same area as cell
 		self.shape_factor = None
+
 		self.ellipse_fvector = None
-		self.mpp_fvector = None
 		self.ccm_fvector = None
+
+		self.spl_poly = None # Spline tck variables approximating 3pv-polygon
 
 		self.cell_to_image()
 
@@ -134,20 +188,23 @@ class ExtractFeatures:
 		y_res = max(self.pix_list, key=itemgetter(1))[1]
 
 		# Creating labeled_img
-		self.bin_img = NP.zeros([x_res+2, y_res+2], dtype=NP.int_)
+		self.cell_img = NP.zeros([x_res+2, y_res+2], dtype=NP.int_)
 		
 		for (x_pix, y_pix) in self.pix_list:
-			self.bin_img[x_pix-1, y_pix-1] = 1
+			self.cell_img[x_pix-1, y_pix-1] = 1
 
 		# Find the pixels that make up the perimeter
-		eroded_image = NDI.binary_erosion(self.bin_img)
-		self.perim_img = self.bin_img - eroded_image
+		eroded_image = NDI.binary_erosion(self.cell_img)
+		eroded_image2 = NDI.binary_erosion(eroded_image)
+
+		# self.perim_img = self.cell_img - eroded_image
+		self.eroded_img = eroded_image - eroded_image2
+		self.perim_img = self.cell_img - eroded_image
 
 		# Create a list of the coordinates of the pixels (use the center of the pixels)
 		perim_image_ind = NP.where(self.perim_img == 1)
 		perim_image_coord = NP.array([perim_image_ind[0], perim_image_ind[1]])
-		perim_image_coord = NP.transpose(perim_image_coord)
-		self.perim_coord = perim_image_coord + 0.5
+		self.perim_coord = NP.transpose(perim_image_coord)
 
 		return
 
@@ -161,38 +218,54 @@ class ExtractFeatures:
 		Reference: http://www.sciencedirect.com/science/article/pii/0308912687902458
 		'''
 		# Perimeter: 3pv and polygon perimeter (polygon from 3pv)
-		self.cell_perimeter, self.poly_perimeter, self.perim_coord_poly = perimeter_3pvm(self.perim_img)
+		self.perim_3pv, self.perim_poly, self.perim_coord_poly = perimeter_3pvm(self.perim_img)
+		_, self.perim_eroded, self.perim_coord_eroded = perimeter_3pvm(self.eroded_img)
+
+		# Perimeter: Approximate polygon using Douglas-Peucker algorithm
+		self.perim_coord_dp = skimage.measure.approximate_polygon(NP.array(self.perim_coord_poly), 0.75)
+
+		# Create cubic spline
+		self.spl_poly, _ = interpolate.splprep(NP.transpose(self.perim_coord_poly), per=1)
 
 		# Perimeter: 1 sqrt2 (function from regionprops)
-		props = skimage.measure.regionprops(self.bin_img)
-		self.naive_perimeter = props[0].perimeter
+		props = skimage.measure.regionprops(self.cell_img)
+		self.perim_1sqrt2 = props[0].perimeter
 
 		# Area: Pixel Counting
-		self.cell_area = len(self.pix_list)	
+		self.area_cell = len(self.pix_list)	
 
 		# Area: Polygon area (from 3pv polygon)
 		# Extract x and y coordinates
 		# We subtract 0.5 because PLT.imshow() shows coordinates as the centers of pixels
 		# Using the shoelace formula: https://en.wikipedia.org/wiki/Shoelace_formula
-		YY = NP.array([self.perim_coord_poly[y][0] - 0.5 for y in range(len(self.perim_coord_poly))])
-		XX = NP.array([self.perim_coord_poly[x][1] - 0.5 for x in range(len(self.perim_coord_poly))])
+		YY = self.perim_coord_poly[:,0]
+		XX = self.perim_coord_poly[:,1]
 
-		self.poly_area = 0.5*NP.abs(NP.dot(XX,NP.roll(YY,1))-NP.dot(YY,NP.roll(XX,1)))
+		self.area_poly = 0.5*NP.abs(NP.dot(XX,NP.roll(YY,1))-NP.dot(YY,NP.roll(XX,1)))
+
+		# Area: Eroded polygon area
+		YY = self.perim_coord_eroded[:,0]
+		XX = self.perim_coord_eroded[:,1]
+
+		self.area_eroded = 0.5*NP.abs(NP.dot(XX,NP.roll(YY,1))-NP.dot(YY,NP.roll(XX,1)))
+
+		# Equivalent Diameter: The diameter of the circle with the same area (pixel counted) as the cell
+		self.equiv_diameter = NP.sqrt(4*self.area_cell/NP.pi)
 		
 		return
 		
 	def shape_factor(self):
+		# TO DO: Check what shape factor gives us
 	
-		if self.cell_perimeter is None:
+		if self.perim_3pv is None:
 			perimeter(self)
-		if self.cell_area is None:
+		if self.area_cell is None:
 			area(self)
 			
-		self.shape_factor = self.cell_perimeter/(4*NP.pi*self.cell_area)
+		self.shape_factor = self.perim_3pv/(4*NP.pi*self.area_cell)
 		return 
 
 	def ellipse_props(self):
-	
 		'''
 		Description: Returns list of properties derived from fitting ellipse (in the following order)
 		centroid_x, centroid_y, eccentricity, eulerNumber, extent, majorAxisLength,
@@ -212,7 +285,7 @@ class ExtractFeatures:
 		Note that the scipy definition of the integral differs slightly than wiki, so we take E(e^2) rather than E(e).
 		'''
 
-		props = skimage.measure.regionprops(self.bin_img)
+		props = skimage.measure.regionprops(self.cell_img)
 
 		centroid = props[0].centroid
 
@@ -229,15 +302,6 @@ class ExtractFeatures:
 		ellipse_prop_list.append(2.0*ellipse_prop_list[5]*scipy.special.ellipe(ellipse_prop_list[2]**2)) # Ellipse perimeter
 
 		self.ellipse_fvector = ellipse_prop_list
-		return
-		
-	def minimum_perimeter_polygon(self):
-	
-		MPP_feature_list = []
-		
-		# TODO: Compute minimum perimeter polygon
-	
-		self.mpp_fvector = MPP_feature_list
 		return
 		
 	def cell_centre_fit(self):
@@ -267,7 +331,6 @@ class ExtractFeatures:
 		return
 
 # Check if lattice contains isolated cells
-
 def contains_isolated_cells():
 	'''
 	Description: This returns true if lattice_data contains more than one connected component
@@ -291,8 +354,20 @@ def contains_isolated_cells():
 # Compute featues for all cells
 featureDict = dict()
 polyPtDict = dict()
+splinePtDict = dict()
+
+spl_u = NP.linspace(0,1, 100) # Spline Parameter
 
 for cell_id in cellDict.keys():
+	'''
+	The following is code to test implementation of features.
+	Only calculate features for the desired test cell.
+	'''
+	if testCell != -1 and cell_id != testCell:
+		continue
+	elif testCell != -1 and cell_id == testCell:
+		extractor = ExtractFeatures(cellDict[cell_id])
+		testFunction(extractor)
 
 	extractor = ExtractFeatures(cellDict[cell_id])
 
@@ -300,7 +375,6 @@ for cell_id in cellDict.keys():
 
 	thread_list.append(threading.Thread(target=extractor.basic_props(), args=(), kwargs={}))
 	thread_list.append(threading.Thread(target=extractor.ellipse_props(), args=(), kwargs={}))
-	thread_list.append(threading.Thread(target=extractor.minimum_perimeter_polygon(), args=(), kwargs={}))
 	thread_list.append(threading.Thread(target=extractor.cell_centre_fit(), args=(), kwargs={}))
 	
 	for thread in thread_list:
@@ -309,30 +383,40 @@ for cell_id in cellDict.keys():
 	for thread in thread_list:
 		thread.join()
 	
-	featureDict[cell_id] = [extractor.cell_area, extractor.naive_perimeter, extractor.shape_factor]
-	featureDict[cell_id] = featureDict[cell_id] +  [extractor.cell_perimeter]
-	featureDict[cell_id] = featureDict[cell_id] + [extractor.poly_perimeter, extractor.poly_area]
+	featureDict[cell_id] = [extractor.area_cell, extractor.perim_1sqrt2, extractor.equiv_diameter]
+	featureDict[cell_id] = featureDict[cell_id] +  [extractor.perim_3pv]
+	featureDict[cell_id] = featureDict[cell_id] + [extractor.perim_poly, extractor.area_poly]
 	featureDict[cell_id] = featureDict[cell_id] + extractor.ellipse_fvector + extractor.ccm_fvector
+	featureDict[cell_id] = featureDict[cell_id] + [extractor.perim_eroded,  extractor.area_eroded]
 
 	polyPtDict[cell_id] = extractor.perim_coord_poly
 
+	# Need flipud() to get x and y coordinates back in (x,y) form
+	splinePtDict[cell_id] = NP.transpose(NP.flipud(interpolate.splev(spl_u, extractor.spl_poly)))
+
+# End program here if we're just testing features
+if testCell != -1:
+	sys.exit()
+
 # Construct featIndexDict
-featIndexDict = dict(BASIC=None, ELLIPSE=None, CCM=None, TPV=None, MPP=None, POLY=None)
+featIndexDict = dict(BASIC=None, ELLIPSE=None, CCM=None, TPV=None, ERODED=None, POLY=None)
 BASIC_numfeat = 3
 TPV_numfeat = 1
 POLY_numfeat = 2
 ELLIPSE_numfeat = 11
 CCM_numfeat = 5
+ERODED_numfeat = 2
 
 TPV_start = BASIC_numfeat
 POLY_start = TPV_start + TPV_numfeat
 ELLIPSE_start = POLY_start + POLY_numfeat
 CCM_start = ELLIPSE_start + ELLIPSE_numfeat
+ERODED_start = CCM_start + CCM_numfeat
 
 featIndexDict['BASIC'] = dict(
 	area = 0,
-	perimeter=1,
-	shape_factor=2)
+	perimeter =1,
+	equiv_diameter=2)
 featIndexDict['TPV'] = dict(
 	perimeter=TPV_start)
 featIndexDict['POLY'] = dict(
@@ -356,25 +440,26 @@ featIndexDict['CCM'] = dict(
 	radius=CCM_start+2,
 	perimeter=CCM_start+3,
 	area=CCM_start+4)
+featIndexDict['ERODED'] = dict(
+	perimeter=ERODED_start,
+	area=ERODED_start+1)
 
 # Plot ellipsoid fit, cell-centre spherical fit, minimum perimeter polygon (MPP) fit
 if plotfits:
 
 	# Plot original cells
-	
 	lattice_matrix = NP.ascontiguousarray(NP.flipud(NP.transpose(lattice_matrix)))
 	pilImage = Image.frombuffer('RGBA', (l_width, l_height), lattice_matrix, 'raw', 'RGBA', 0, 1)
 	pilImage = pilImage.convert('RGB')
 	pilImage.save(pifFileName + '_Boundary.png')
 	
 	# Plot polygonized lattice
-	
-	# sp = None
-	# if not contains_isolated_cells():
-	# 	dirname = os.path.dirname(os.path.abspath(__file__))
-	# 	cmd = "python3 vectorize.py --file " + pifFile + " --size " + str(l_width) + "," + str(l_height) + " --output " + dirname
-	# 	args = shlex.split(cmd)
-	# 	sp = subprocess.Popen(args)
+	sp = None
+	if not contains_isolated_cells():
+		dirname = os.path.dirname(os.path.abspath(__file__))
+		cmd = "python3 vectorize.py --file " + pifFile + " --size " + str(l_width) + "," + str(l_height) + " --output " + dirname
+		args = shlex.split(cmd)
+		sp = subprocess.Popen(args)
 
 	# Plot ellipse fits
 	fig = PLT.figure(1)
@@ -402,7 +487,7 @@ if plotfits:
 	
 	ax.set_xlim([0,l_width])
 	ax.set_ylim([0,l_height])
-	PLT.savefig(pifFileName + '_EllipseFit.png')
+	PLT.savefig(pifFileName + '_EllipseFit.png', bbox_inches='tight', dpi = 400)
 	
 	# Plot cell-centre model (disk fit)
 	fig = PLT.figure(2)
@@ -427,7 +512,7 @@ if plotfits:
 
 	ax.set_xlim([0,l_width])
 	ax.set_ylim([0,l_height])
-	PLT.savefig(pifFileName + '_CircleFit.png')
+	PLT.savefig(pifFileName + '_CircleFit.png', bbox_inches='tight', dpi = 400)
 
 	# Plot 3pv-polygon model
 	fig = PLT.figure(3)
@@ -450,15 +535,33 @@ if plotfits:
 
 	ax.set_xlim([0,l_width])
 	ax.set_ylim([0,l_height])
-	PLT.savefig(pifFileName + '_3pvPolyFit.png')
-	PLT.show()
+	PLT.savefig(pifFileName + '_3pvPolyFit.png', bbox_inches='tight', dpi = 400)
+	
+	# Plot spline model
+	fig = PLT.figure(4)
+	ax = fig.add_subplot(111, aspect='equal')
 
-	# Plot MPP fit
+	polys = [[Polygon(NP.array(splinePtDict[cell_id])),
+		cellTypeDict[cell_id]] for cell_id in cellDict.keys()]
+
+	for poly in polys:
+		p = poly[0]
+		ctype = poly[1]
+		ax.add_artist(p)
+		p.set_alpha(0.3)
+		if ctype == 'CellU':
+			p.set_facecolor([0,1,0])
+		elif ctype == 'CellV':
+			p.set_facecolor([1,0,0])
+		else:
+			p.set_facecolor([0,0,1])
+
+	ax.set_xlim([0,l_width])
+	ax.set_ylim([0,l_height])
+	PLT.savefig(pifFileName + '_SplineFit.png', bbox_inches='tight', dpi = 400)
 	
-	# TODO
-	
-	# if sp is not None:
-	# 	sp.wait()
+	if sp is not None:
+		sp.wait()
 	
 # Compare features 
 if comparefits:
@@ -468,6 +571,7 @@ if comparefits:
 	perim_1sqrt2 = []
 	perim_ellipse = []
 	perim_circle = []
+	perim_eroded = []
 	perim_3pv = []
 	perim_poly = []
 	perim_xml = []
@@ -475,6 +579,7 @@ if comparefits:
 	area_ellipse = []
 	area_circle = []
 	area_basic = []
+	area_eroded = []
 	area_poly = []
 	area_xml = []
 
@@ -494,11 +599,13 @@ if comparefits:
 		perim_1sqrt2.append(featureDict[cell_id][featIndexDict['BASIC']['perimeter']])
 		perim_ellipse.append(featureDict[cell_id][featIndexDict['ELLIPSE']['perimeter']])
 		perim_circle.append(featureDict[cell_id][featIndexDict['CCM']['perimeter']])
+		perim_eroded.append(featureDict[cell_id][featIndexDict['ERODED']['perimeter']])
 		perim_3pv.append(featureDict[cell_id][featIndexDict['TPV']['perimeter']])
 		perim_poly.append(featureDict[cell_id][featIndexDict['POLY']['perimeter']])
 
 		area_ellipse.append(featureDict[cell_id][featIndexDict['ELLIPSE']['area']])
 		area_circle.append(featureDict[cell_id][featIndexDict['CCM']['area']])
+		area_eroded.append(featureDict[cell_id][featIndexDict['ERODED']['area']])
 		area_basic.append(featureDict[cell_id][featIndexDict['BASIC']['area']])
 		area_poly.append(featureDict[cell_id][featIndexDict['POLY']['area']])
 
@@ -513,12 +620,14 @@ if comparefits:
 	perim_ellispe = NP.array(perim_ellipse)[perim_reorder_ind]
 	perim_circle = NP.array(perim_circle)[perim_reorder_ind]
 	perim_poly = NP.array(perim_poly)[perim_reorder_ind]
+	perim_eroded = NP.array(perim_eroded)[perim_reorder_ind]
 	perim_3pv = NP.array(perim_3pv)[perim_reorder_ind]
 
 	area_reorder_ind = NP.argsort(area_basic)
 	area_ellipse = NP.array(area_ellipse)[area_reorder_ind]
 	area_circle = NP.array(area_circle)[area_reorder_ind]
 	area_poly = NP.array(area_poly)[area_reorder_ind]
+	area_eroded = NP.array(area_eroded)[area_reorder_ind]
 	area_basic = NP.array(area_circle)[area_reorder_ind]
 
 	if plotXML:
@@ -534,6 +643,7 @@ if comparefits:
 	PLT.plot(cell_range, perim_ellipse)
 	PLT.plot(cell_range, perim_circle)
 	PLT.plot(cell_range, perim_poly)
+	PLT.plot(cell_range, perim_eroded)
 	PLT.plot(cell_range, perim_1sqrt2)
 	PLT.plot(cell_range, perim_3pv)
 
@@ -541,9 +651,9 @@ if comparefits:
 	PLT.ylabel('Perimeter')
 	PLT.title('Comparison of Perimeter vs. Cell')
 	if plotXML:
-		PLT.legend(["xml", "Ellipse fit", "CCM fit", "Poly fit", "1, sqrt(2) method", "3pv method"], loc=2)
+		PLT.legend(["xml", "Ellipse fit", "CCM fit", "Poly fit", "Eroded Poly", "1, sqrt(2) method", "3pv method"], loc=2)
 	else:
-		PLT.legend(["Ellipse fit", "CCM fit", "Poly fit", "1, sqrt(2) method", "3pv method"], loc=2)	
+		PLT.legend(["Ellipse fit", "CCM fit", "Poly fit", "Eroded Poly", "1, sqrt(2) method", "3pv method"], loc=2)	
 	PLT.savefig(pifFileName + '_PerimCompare.png', bbox_inches='tight', dpi = 400)
 
 	PLT.figure(2)
@@ -552,13 +662,15 @@ if comparefits:
 	PLT.plot(cell_range, area_ellipse)
 	PLT.plot(cell_range, area_circle)
 	PLT.plot(cell_range, area_poly)
+	PLT.plot(cell_range, area_eroded)
 	PLT.plot(cell_range, area_basic)
 
 	PLT.xlabel('Cell (arbitrary)')
 	PLT.ylabel('Area')
 	PLT.title('Comparison of Area vs. Cell')
 	if plotXML:
-		PLT.legend([ "xml", "Ellipse fit", "CCM fit", "Poly fit", "Pixel counting"], loc=2)
+		PLT.legend([ "xml", "Ellipse fit", "CCM fit", "Poly fit", "Eroded Poly", "Pixel counting"], loc=2)
 	else:
-		PLT.legend([ "Ellipse fit", "CCM fit", "Poly fit", "Pixel counting"], loc=2)		
+		PLT.legend([ "Ellipse fit", "CCM fit", "Poly fit", "Eroded Poly", "Pixel counting"], loc=2)		
 	PLT.savefig(pifFileName + '_AreaCompare.png', bbox_inches='tight', dpi = 400)
+
