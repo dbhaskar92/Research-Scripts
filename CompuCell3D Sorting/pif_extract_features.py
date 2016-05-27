@@ -2,7 +2,7 @@
 
 #
 # Last modified: 19 May 2016
-# Author: Dhananjay Bhaskar <dbhaskar92@gmail.com>
+# Author: Darrick Lee <y.l.darrick@gmail.com>, Dhananjay Bhaskar <dbhaskar92@gmail.com>
 # Extract cell shape features from PIF file
 # 
 
@@ -25,12 +25,15 @@ from optparse import OptionParser
 from scipy import ndimage as NDI
 from matplotlib.patches import Ellipse, Polygon
 
+imgDPI = 200
+
 pifFile = None
 xmlFile = None
+outFolder = './'
 l_height, l_width = -1, -1
 xmlTime = -1
 testCell = -1
-plotfits, comparefits = None, None
+plotfits, comparefits, separate = None, None, None
 
 parser = OptionParser()
 parser.add_option("-i", "--input", action="store", type="string", dest="inputfile", help="path to PIF file", metavar="PIF")
@@ -41,10 +44,12 @@ parser.add_option("-p","--plot", action="store_true", dest="plotfits", help="plo
 parser.add_option("-c","--compare", action="store_true", dest="comparefits", help="compare fitted geometry", default=False)
 parser.add_option("-t","--time", action="store", type="int", dest="time", help="time in XML file to compare", metavar="TIME")
 parser.add_option("-T","--test", action="store", type="int", dest="testcell", help="runs the test code on specified cell")
+parser.add_option("-o","--output", action="store", type="string", dest="outputfolder", help="the folder to store output plots", metavar="OUTPUT")
+parser.add_option("-s","--separate", action="store_true", dest="separate", help="separate folders for plots", default=False, metavar="SEPARATE")
+parser.add_option("-m","--multithread", action="store_true", dest="multithread", help="use multithreading", default=False)
 
 
 # Options parsing
-
 (options, args) = parser.parse_args()
 if options.inputfile:
 	pifFile = options.inputfile
@@ -66,20 +71,57 @@ if options.time is not None:
 	xmlTime = options.time
 if options.testcell:
 	testCell = options.testcell
+if options.outputfolder:
+	outFolder = options.outputfolder
+if options.separate:
+	separate = True
+else:
+	separate = False
+if options.multithread:
+	multithreading = True
+else:
+	multithreading = False
 
 plotXML = xmlFile is not None and xmlTime != -1
 
 pifFileName = ''
 
 if os.path.isfile(pifFile):
-	pifFileName = os.path.splitext(pifFile)[0]
+	pifFileName_withPath = os.path.splitext(pifFile)[0]
+	pifFileName = pifFileName_withPath.split('/')[-1]
 else:
 	print("Error: PIF file does not exist.\n")
 	exit()
 
+if not os.path.isdir(outFolder):
+	print("Error: Output directory does not exist.\n")
+	exit()
+
+# Check if separate folders have been made and initialize output folders
+if separate:
+	circleOut = outFolder + 'CircleFit/'
+	ellipseOut = outFolder + 'EllipseFit/'
+	splineOut = outFolder + 'SplineFit/'
+	polyOut = outFolder + 'PolyFit/'
+	boundaryOut = outFolder + 'BoundaryFit/'
+	vectorizeOut = outFolder + 'vectorizeFit/'
+
+	if not os.path.isdir(circleOut):
+		os.mkdir(circleOut)
+	if not os.path.isdir(ellipseOut):
+		os.mkdir(ellipseOut)
+	if not os.path.isdir(splineOut):
+		os.mkdir(splineOut)
+	if not os.path.isdir(polyOut):
+		os.mkdir(polyOut)
+	if not os.path.isdir(boundaryOut):
+		os.mkdir(boundaryOut)
+	if not os.path.isdir(vectorizeOut):
+		os.mkdir(vectorizeOut)
+else:
+	circleOut = ellipseOut = splineOut = polyOut = boundaryOut = vectorizeOut = outFolder
 
 # Parse PIF file	
-
 lattice = open(pifFile).read().split('\n')[1:-1]
 cellDict = dict()
 cellTypeDict = dict()
@@ -156,10 +198,10 @@ def TestSingleCellPlot(extractor):
 
 	PLT.imshow(extractor.perim_img, interpolation='nearest', cmap='Greys')
 	PLT.plot(extractor.perim_coord_poly[:,1], extractor.perim_coord_poly[:,0], linewidth=3, color='g')
-	PLT.plot(OUT[0], OUT[1], linewidth=3, color='r')
+	# PLT.plot(OUT[0], OUT[1], linewidth=3, color='r')
 
-	# PLT.plot(extractor.perim_coord_eroded[:,1], extractor.perim_coord_eroded[:,0], linewidth=3, color='r')
-	# PLT.plot(extractor.perim_coord_dp[:,1], extractor.perim_coord_dp[:,0], linewidth=3, color='m')
+	PLT.plot(extractor.perim_coord_eroded[:,1], extractor.perim_coord_eroded[:,0], linewidth=3, color='r')
+	PLT.plot(extractor.perim_coord_dp[:,1], extractor.perim_coord_dp[:,0], linewidth=3, color='m')
 
 	PLT.legend(['Poly','Spline','D-P'], loc=2)
 
@@ -187,23 +229,30 @@ for cell_id in cellDict.keys():
 
 		extractor = extractcellfeatures.ExtractFeatures(cellDict[cell_id])
 
-		thread_list = []
+		if multithreading:
+			thread_list = []
 
-		thread_list.append(threading.Thread(target=extractor.basic_props(), args=(), kwargs={}))
-		thread_list.append(threading.Thread(target=extractor.ellipse_props(), args=(), kwargs={}))
-		thread_list.append(threading.Thread(target=extractor.cell_centre_fit(), args=(), kwargs={}))
-	
-		for thread in thread_list:
-			thread.start()
-	
-		for thread in thread_list:
-			thread.join()
+			thread_list.append(threading.Thread(target=extractor.basic_props(), args=(), kwargs={}))
+			thread_list.append(threading.Thread(target=extractor.ellipse_props(), args=(), kwargs={}))
+			thread_list.append(threading.Thread(target=extractor.cell_centre_fit(), args=(), kwargs={}))
+		
+			for thread in thread_list:
+				thread.start()
+		
+			for thread in thread_list:
+				thread.join()
+		else:
+			extractor.basic_props()
+			extractor.ellipse_props()
+			extractor.cell_centre_fit()
 	
 		featureDict[cell_id] = [extractor.area_cell, extractor.perim_1sqrt2, extractor.equiv_diameter]
 		featureDict[cell_id] = featureDict[cell_id] +  [extractor.perim_3pv]
 		featureDict[cell_id] = featureDict[cell_id] + [extractor.perim_poly, extractor.area_poly]
 		featureDict[cell_id] = featureDict[cell_id] + extractor.ellipse_fvector + extractor.ccm_fvector
 		featureDict[cell_id] = featureDict[cell_id] + [extractor.perim_eroded,  extractor.area_eroded]
+
+		# print("Cell ID: {0}, Radius: {1}".format(cell_id, extractor.ccm_fvector[2]))
 
 		polyPtDict[cell_id] = extractor.perim_coord_poly
 
@@ -273,12 +322,12 @@ if plotfits:
 	lattice_matrix = NP.ascontiguousarray(NP.flipud(NP.transpose(lattice_matrix)))
 	pilImage = Image.frombuffer('RGBA', (l_width, l_height), lattice_matrix, 'raw', 'RGBA', 0, 1)
 	pilImage = pilImage.convert('RGB')
-	pilImage.save(pifFileName + '_Boundary.png')
+	pilImage.save(boundaryOut + pifFileName + '_Boundary.png')
 	
 	# Plot polygonized lattice
 	sp = None
 	if not contains_isolated_cells():
-		dirname = os.path.dirname(os.path.abspath(__file__))
+		dirname = os.path.dirname(os.path.abspath(__file__)) + vectorizeOut
 		if os.path.isfile(os.path.join(dirname, 'vectorize.py')):
 			cmd = "python3 vectorize.py --file " + pifFile + " --size " + str(l_width) + "," + str(l_height) + " --output " + dirname
 			args = shlex.split(cmd)
@@ -311,7 +360,7 @@ if plotfits:
 	
 	ax.set_xlim([0,l_width])
 	ax.set_ylim([0,l_height])
-	PLT.savefig(pifFileName + '_EllipseFit.png', bbox_inches='tight', dpi = 400)
+	PLT.savefig(ellipseOut + pifFileName + '_EllipseFit.png', bbox_inches='tight', dpi = imgDPI)
 	
 	# Plot cell-centre model (disk fit)
 	numFigs += 1
@@ -337,7 +386,7 @@ if plotfits:
 
 	ax.set_xlim([0,l_width])
 	ax.set_ylim([0,l_height])
-	PLT.savefig(pifFileName + '_CircleFit.png', bbox_inches='tight', dpi = 400)
+	PLT.savefig(circleOut + pifFileName + '_CircleFit.png', bbox_inches='tight', dpi = imgDPI)
 
 	# Plot 3pv-polygon model
 	numFigs += 1
@@ -361,7 +410,7 @@ if plotfits:
 
 	ax.set_xlim([0,l_width])
 	ax.set_ylim([0,l_height])
-	PLT.savefig(pifFileName + '_3pvPolyFit.png', bbox_inches='tight', dpi = 400)
+	PLT.savefig(polyOut + pifFileName + '_PolyFit.png', bbox_inches='tight', dpi = imgDPI)
 	
 	# Plot spline model
 	numFigs += 1
@@ -385,7 +434,7 @@ if plotfits:
 
 	ax.set_xlim([0,l_width])
 	ax.set_ylim([0,l_height])
-	PLT.savefig(pifFileName + '_SplineFit.png', bbox_inches='tight', dpi = 400)
+	PLT.savefig(splineOut + pifFileName + '_SplineFit.png', bbox_inches='tight', dpi = imgDPI)
 	
 	if sp is not None:
 		sp.wait()
@@ -488,7 +537,7 @@ if comparefits:
 		lgd = PLT.legend(["xml", "Ellipse fit", "CCM fit", "Poly fit", "Eroded Poly", "1, sqrt(2) method", "3pv method"],
 		bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=3, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
 	
-	PLT.savefig(pifFileName + '_PerimCompare.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
+	PLT.savefig(outFolder + pifFileName + '_PerimCompare.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = imgDPI)
 
 	numFigs += 1
 	PLT.figure(numFigs)
@@ -510,4 +559,4 @@ if comparefits:
 		PLT.legend([ "xml", "Ellipse fit", "CCM fit", "Poly fit", "Eroded Poly", "Pixel counting"],
 		bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=3, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
 				
-	PLT.savefig(pifFileName + '_AreaCompare.png', bbox_inches='tight', dpi = 400)
+	PLT.savefig(outFolder + pifFileName + '_AreaCompare.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = imgDPI)
