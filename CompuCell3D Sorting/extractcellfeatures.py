@@ -9,6 +9,7 @@ import scipy.special
 import skimage.measure
 import skimage.morphology
 import perimeter_3pvm
+import matplotlib.pyplot as PLT
 
 from operator import itemgetter
 from scipy import interpolate
@@ -64,10 +65,12 @@ class ExtractFeatures:
 
 		# Find the pixels that make up the perimeter
 		eroded_image = NDI.binary_erosion(self.cell_img)
-		eroded_image2 = NDI.binary_erosion(eroded_image)
+
+		eroded_image_open = NDI.binary_opening(eroded_image, structure=NP.ones((3,3)))
+		eroded_image_open2 = NDI.binary_erosion(eroded_image_open)
 
 		# self.perim_img = self.cell_img - eroded_image
-		self.eroded_img = eroded_image - eroded_image2
+		self.eroded_img = eroded_image_open - eroded_image_open2
 		self.perim_img = self.cell_img - eroded_image
 
 		# Create a list of the coordinates of the pixels (use the center of the pixels)
