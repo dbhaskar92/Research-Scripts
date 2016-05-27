@@ -18,12 +18,14 @@ from optparse import OptionParser
 pifFolder = ''
 startTime, endTime = None, None
 threads = 1
+pifFolder = None
 
 parser = OptionParser()
 parser.add_option("-p", "--path", action="store", type="string", dest="pifFolder", help="path to folder with PIF files", metavar="PIF")
 parser.add_option("--start", action="store", type="int", dest="start", help="first time to process", metavar="START")
 parser.add_option("--end", action="store", type="int", dest="end", help="last time to process", metavar="END")
 parser.add_option('-t', "--threads", action="store", type="int", dest="threads", help="number of threads to run", metavar="THREAD")
+parser.add_option("-o","--output", action="store", type="string", dest="outputfolder", help="the folder to store output plots", metavar="OUTPUT")
 
 # Options parsing
 (options, args) = parser.parse_args()
@@ -39,18 +41,27 @@ else:
 	endTime = 9999999
 if options.threads:
 	threads = options.threads
+if options.outputfolder:
+	outFolder = options.outputfolder
+else:
+	outFolder = pifFolder
+
+boundaryFolder = outFolder + "BoundaryFit/"
 
 def run_pif_extract_features(pifList):
 	# Function that executes pif_extract_features.py for all given pif files
 	for pif in pifList:
 		pifName = os.path.splitext(pif)[0]
+		pifName_nopath = pifName.split('/')[-1]
+		boundaryFile = boundaryFolder + pifName_nopath + '_Boundary.png'
 
-		subprocess.call(['python', 'pif_extract_features.py',
-			'-i', pif,
-			'-o', pifFolder,
-			'-l', '800',
-			'-w', '800',
-			'-p', '-s'])
+		if not os.path.isfile(boundaryFile):
+			subprocess.call(['python', 'pif_extract_features.py',
+				'-i', pif,
+				'-o', outFolder,
+				'-l', '800',
+				'-w', '800',
+				'-p', '-s'])
 
 t0 = time.time()
 

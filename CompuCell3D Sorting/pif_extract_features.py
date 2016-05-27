@@ -26,6 +26,8 @@ from scipy import ndimage as NDI
 from matplotlib.patches import Ellipse, Polygon
 
 imgDPI = 200
+radius_thresh = 50 # Threshold value for circle radius (also used for ellipse)
+
 
 pifFile = None
 xmlFile = None
@@ -348,6 +350,11 @@ if plotfits:
 	for el in ells:
 		e = el[0]
 		ctype = el[1]
+
+		# Don't plot the ellipse if it is too big
+		if (e.height > radius_thresh) or (e.width > radius_thresh):
+			continue
+
 		ax.add_artist(e)
 		e.set_clip_box(ax.bbox)
 		e.set_alpha(0.3)
@@ -375,6 +382,11 @@ if plotfits:
 	for circle in circles:
 		c = circle[0]
 		ctype = circle[1]
+
+		# Don't plot the circle if it is too big
+		if c.radius > radius_thresh:
+			continue
+
 		ax.add_artist(c)
 		c.set_alpha(0.3)
 		if ctype == 'CellU':
