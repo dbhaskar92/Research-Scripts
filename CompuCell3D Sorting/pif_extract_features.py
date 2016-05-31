@@ -28,7 +28,6 @@ from matplotlib.patches import Ellipse, Polygon
 imgDPI = 200
 radius_thresh = 50 # Threshold value for circle radius (also used for ellipse)
 
-
 pifFile = None
 xmlFile = None
 outFolder = './'
@@ -47,9 +46,8 @@ parser.add_option("-c","--compare", action="store_true", dest="comparefits", hel
 parser.add_option("-t","--time", action="store", type="int", dest="time", help="time in XML file to compare", metavar="TIME")
 parser.add_option("-T","--test", action="store", type="int", dest="testcell", help="runs the test code on specified cell")
 parser.add_option("-o","--output", action="store", type="string", dest="outputfolder", help="the folder to store output plots", metavar="OUTPUT")
-parser.add_option("-s","--separate", action="store_true", dest="separate", help="separate folders for plots", default=False, metavar="SEPARATE")
+parser.add_option("-s","--separate", action="store_true", dest="separate", help="separate subfolders for plots", default=False, metavar="SEPARATE")
 parser.add_option("-m","--multithread", action="store_true", dest="multithread", help="use multithreading", default=False)
-
 
 # Options parsing
 (options, args) = parser.parse_args()
@@ -93,11 +91,11 @@ if os.path.isfile(pifFile):
 	pifFileName = pifFileName_withPath.split('/')[-1]
 else:
 	print("Error: PIF file does not exist.\n")
-	exit()
+	sys.exit(1)
 
 if not os.path.isdir(outFolder):
 	print("Error: Output directory does not exist.\n")
-	exit()
+	sys.exit(1)
 
 # Check if separate folders have been made and initialize output folders
 if separate:
@@ -182,6 +180,8 @@ def contains_isolated_cells():
 def TestSingleCellPlot(extractor):
 
 	extractor.basic_props()
+	extractor.ellipse_props()
+	extractor.cell_centre_fit()
 
 	perim_img_ind = NP.where(extractor.perim_img == 1)
 
@@ -191,25 +191,66 @@ def TestSingleCellPlot(extractor):
 	ylim_min = min(perim_img_ind[0])-2
 	ylim_max = max(perim_img_ind[0])+2
 
-	fig = PLT.figure(1)
-	ax = fig.add_subplot(111, aspect='equal')
-
 	U = NP.linspace(0,1.01,100)
 	OUT = interpolate.splev(U, extractor.spl_poly)
 	OUT = NP.flipud(OUT)
 
+	# Create Circle/Ellipse plot
+	fig = PLT.figure(1)
+	ax = fig.add_subplot(111, aspect='equal')
+
+	# Create cirlce plot
+	c = PLT.Circle((extractor.ccm_fvector[1],
+			extractor.ccm_fvector[0]),
+			extractor.ccm_fvector[2])
+
+	# Create ellipse plot
+	e = Ellipse(xy=NP.array([extractor.ellipse_fvector[1], extractor.ellipse_fvector[0]]),
+			width = extractor.ellipse_fvector[6],
+			height = extractor.ellipse_fvector[5],
+			angle = extractor.ellipse_fvector[7]/(2*NP.pi)*360)
+
 	PLT.imshow(extractor.perim_img, interpolation='nearest', cmap='Greys')
-	PLT.plot(extractor.perim_coord_poly[:,1], extractor.perim_coord_poly[:,0], linewidth=3, color='g')
-	# PLT.plot(OUT[0], OUT[1], linewidth=3, color='r')
 
-	PLT.plot(extractor.perim_coord_eroded[:,1], extractor.perim_coord_eroded[:,0], linewidth=3, color='r')
-	PLT.plot(extractor.perim_coord_dp[:,1], extractor.perim_coord_dp[:,0], linewidth=3, color='m')
+	ax.add_artist(c)
+	c.set_alpha(1)
+	c.set_facecolor('none')
+	c.set_edgecolor('blue')
+	c.set_linewidth(3)
+	c.set_label('Circle')
 
-	PLT.legend(['Poly','Spline','D-P'], loc=2)
+	ax.add_artist(e)
+	e.set_alpha(1)
+	e.set_facecolor('none')
+	e.set_edgecolor('orange')
+	e.set_linewidth(3)
+	e.set_label('Ellipse')
+
+	PLT.plot(0,0,color='blue',label='Circle',lw=3)
+	PLT.plot(0,0,color='orange',label='Ellipse',lw=3)
+
+	lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=2, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
 
 	ax.set_xlim([xlim_min, xlim_max])
 	ax.set_ylim([ylim_min, ylim_max])
-	PLT.savefig(pifFileName + '_SplineFits.png', bbox_inches='tight', dpi = 400)
+	PLT.savefig(pifFileName + '_CircEllipseFits.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
+
+	# Create poly/spline plots
+	fig = PLT.figure(2)
+	ax = fig.add_subplot(111, aspect='equal')
+
+	PLT.imshow(extractor.perim_img, interpolation='nearest', cmap='Greys')
+	PLT.plot(extractor.perim_coord_poly[:,1], extractor.perim_coord_poly[:,0], label='Poly', linewidth=3, color='g')
+	PLT.plot(OUT[0], OUT[1], linewidth=3, label='Spline', color='m')
+	PLT.plot(extractor.perim_coord_eroded[:,1], extractor.perim_coord_eroded[:,0], label='Eroded', linewidth=3, color='r')
+
+	# PLT.plot(extractor.perim_coord_dp[:,1], extractor.perim_coord_dp[:,0], linewidth=3, color='m')
+
+	lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=3, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
+
+	ax.set_xlim([xlim_min, xlim_max])
+	ax.set_ylim([ylim_min, ylim_max])
+	PLT.savefig(pifFileName + '_PolySplineFits.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
 	
 		
 # Compute features for all cells
@@ -329,9 +370,9 @@ if plotfits:
 	# Plot polygonized lattice
 	sp = None
 	if not contains_isolated_cells():
-		dirname = os.path.dirname(os.path.abspath(__file__)) + vectorizeOut
+		dirname = os.path.dirname(os.path.abspath(__file__))
 		if os.path.isfile(os.path.join(dirname, 'vectorize.py')):
-			cmd = "python3 vectorize.py --file " + pifFile + " --size " + str(l_width) + "," + str(l_height) + " --output " + dirname
+			cmd = "python3 vectorize.py --file " + pifFile + " --size " + str(l_width) + "," + str(l_height) + " --output " + vectorizeOut
 			args = shlex.split(cmd)
 			sp = subprocess.Popen(args)
 

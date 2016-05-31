@@ -5,6 +5,8 @@
 # Author: Darrick Lee <y.l.darrick@gmail.com>, Dhananjay Bhaskar <dbhaskar92@gmail.com>
 # A wrapper for pif_extract_features.py to execute for a set of PIF files.
 # 
+# Requriements: vectorize.py
+
 
 import os
 import glob
@@ -26,6 +28,7 @@ parser.add_option("--start", action="store", type="int", dest="start", help="fir
 parser.add_option("--end", action="store", type="int", dest="end", help="last time to process", metavar="END")
 parser.add_option('-t', "--threads", action="store", type="int", dest="threads", help="number of threads to run", metavar="THREAD")
 parser.add_option("-o","--output", action="store", type="string", dest="outputfolder", help="the folder to store output plots", metavar="OUTPUT")
+parser.add_option('r', "--rewrite", action="store_true", dest="rewrite", help="rewrite old files", default=False)
 
 # Options parsing
 (options, args) = parser.parse_args()
@@ -45,6 +48,10 @@ if options.outputfolder:
 	outFolder = options.outputfolder
 else:
 	outFolder = pifFolder
+if options.rewrite:
+	rewrite = True
+else:
+	rewrite = False
 
 boundaryFolder = outFolder + "BoundaryFit/"
 
@@ -53,6 +60,8 @@ def run_pif_extract_features(pifList):
 	for pif in pifList:
 		pifName = os.path.splitext(pif)[0]
 		pifName_nopath = pifName.split('/')[-1]
+
+		#
 		boundaryFile = boundaryFolder + pifName_nopath + '_Boundary.png'
 
 		if not os.path.isfile(boundaryFile):
