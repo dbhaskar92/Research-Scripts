@@ -10,6 +10,8 @@ import sys
 import csv
 import collections
 import numpy as NP
+import matplotlib.pyplot as PLT
+from scipy.misc import imread
 from sortedcontainers import SortedSet
 
 if (len(sys.argv) != 2):
@@ -23,7 +25,6 @@ interval_length = 10
 # hold in memory
 frame_path_map = {}
 
-
 # parse file
 with open(sys.argv[1]) as csvfile:
 
@@ -36,7 +37,7 @@ with open(sys.argv[1]) as csvfile:
 # track all cells identified at the given time (frame)
 def track_cells(time):
 
-	frames = SortedSet()							# List of image frames
+	frames = SortedSet()						# List of image frames
 
 	c_area_map = collections.defaultdict(list)		# Cell Area
 	c_aXY_map = collections.defaultdict(list)		# AreaShape_Center
@@ -73,13 +74,50 @@ def track_cells(time):
 				print " ".join(map(str, item[:]))
 			print "\n"
 				
-			# Generate Centroid Tracks
-			# TODO
-
-			# Generate Displacement Histogram
-			# TODO
+	# Generate Centroid Tracks
+	plotFrame = frames[len(frames)-1]
+	imgFile = frame_path_map[plotFrame]
+	print "DEBUG Largest track for time t = " + str(time) + " ends at frame: " + str(plotFrame) + " image file: " + imgFile + "\n"
+	
+	cnt = 0
+	for i in range(time, plotFrame+1):
+		
+		img = "./OutlineCells/OutlineCells" + "{0:0>3}".format(i) + ".png"
+		PLT.figure(cnt)
+		axes = PLT.gca()
+		axes.set_xlim([0,1600])
+		axes.set_ylim([0,1200])
+		bg = imread(img)
+		PLT.imshow(bg, zorder=0)
+		
+		for cid in c_aXY_map.keys():
+		
+			xdata = []
+			ydata = []
+		
+			if cnt == 0:
+				[x, y] = c_aXY_map[cid][0]
+				PLT.scatter(x, y, s=4, zorder=1)
+			else:
+				for k in range(0, cnt+1):
+					try:
+						xdata.append(c_aXY_map[cid][k][0])
+						ydata.append(c_aXY_map[cid][k][1])
+					except IndexError:
+						break
+				if len(xdata) == cnt+1:
+					lines = PLT.plot(xdata, ydata, zorder=1)
+					PLT.setp(lines, 'color', 'r', 'linewidth', 2.0)
+		
+		PLT.savefig("Track_" + "{0:0>3}".format(i) + ".png", bbox_inches='tight')
 			
-	print "DEBUG Largest track for time t=" + str(time) + " ends at frame number: " + str(frames[len(frames)-1]) + "\n"
+		cnt = cnt + 1
+	
+
+	# Generate Displacement Histogram
+	# TODO
+			
+	
 							
 						
 def get_cell_future(obj_num, time, area_future, aXY_future, cmi_future, cnt_future):
