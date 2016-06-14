@@ -5,6 +5,7 @@
 # Author: Dhananjay Bhaskar <dbhaskar92@gmail.com>
 #
 
+import os
 import sys
 import csv
 import math
@@ -34,7 +35,7 @@ with open(sys.argv[1]) as csvfile:
 		
 		
 # track all cells identified at the given time (frame)
-def track_cells(time):
+def track_cells(time, dirname):
 
 	c_area_map = collections.defaultdict(list)		# Cell Area
 	c_aXY_map = collections.defaultdict(list)		# AreaShape_Center
@@ -91,7 +92,12 @@ def track_cells(time):
 	
 	# Tracks over segmented cell image
 	cnt = 0
-	lineclr = 'dodgerblue'						# dodgerblue for green channel, goldenrod for red channel 
+	if not os.path.exists(dirname + os.sep + "Tracks"):
+		os.makedirs(dirname + os.sep + "Tracks")
+	
+	# Line color: dodgerblue for green channel, goldenrod for red channel	
+	lineclr = 'goldenrod'
+								 
 	for i in range(time, plotFrame+1):
 		
 		img = "./OutlineCells/OutlineCells" + "{0:0>3}".format(i) + ".png"
@@ -105,19 +111,19 @@ def track_cells(time):
 		bg = imread(img)
 		PLT.imshow(bg, zorder=0)
 		
-		for cid in c_aXY_map.keys():
+		for cid in c_cnt_map.keys():
 		
 			xdata = []
 			ydata = []
 		
 			if cnt == 0:
-				[x, y] = c_aXY_map[cid][0]
+				[x, y] = c_cnt_map[cid][0]
 				PLT.scatter(x, y, color=lineclr, s=4, zorder=1)
 			else:
 				for k in range(0, cnt+1):
 					try:
-						xdata.append(c_aXY_map[cid][k][0])
-						ydata.append(c_aXY_map[cid][k][1])
+						xdata.append(c_cnt_map[cid][k][0])
+						ydata.append(c_cnt_map[cid][k][1])
 					except IndexError:
 						break
 				if len(xdata) == cnt+1:
@@ -125,7 +131,7 @@ def track_cells(time):
 					PLT.setp(lines, 'color', lineclr, 'linewidth', 1.0)
 					PLT.scatter(xdata[-1], ydata[-1], color=lineclr, s=4, zorder=2)
 		
-		PLT.savefig("Track_" + "{0:0>3}".format(i) + ".png", bbox_inches='tight', dpi=200)
+		PLT.savefig(dirname + os.sep + "Tracks" + os.sep + "Track_" + "{0:0>3}".format(i) + ".png", bbox_inches='tight', dpi=200)
 		PLT.close(fig)
 		figcnt = figcnt + 1	
 		cnt = cnt + 1
@@ -133,6 +139,9 @@ def track_cells(time):
 	
 	# Tracks color coded by horizontal position
 	cnt = 0
+	if not os.path.exists(dirname + os.sep + "Color"):
+		os.makedirs(dirname + os.sep + "Color")
+		
 	for i in range(time, plotFrame+1):
 		
 		fig = PLT.figure(figcnt)
@@ -143,26 +152,26 @@ def track_cells(time):
 		axes.xaxis.tick_top()
 		axes.yaxis.tick_left()
 		
-		for cid in c_aXY_map.keys():
+		for cid in c_cnt_map.keys():
 		
 			xdata = []
 			ydata = []
 		
 			if cnt == 0:
-				[x, y] = c_aXY_map[cid][0]
+				[x, y] = c_cnt_map[cid][0]
 				PLT.scatter(x, y, color=c_color_map[cid], s=4)
 			else:
 				for k in range(0, cnt+1):
 					try:
-						xdata.append(c_aXY_map[cid][k][0])
-						ydata.append(c_aXY_map[cid][k][1])
+						xdata.append(c_cnt_map[cid][k][0])
+						ydata.append(c_cnt_map[cid][k][1])
 					except IndexError:
 						break
 				lines = PLT.plot(xdata, ydata)
 				PLT.setp(lines, 'color', c_color_map[cid], 'linewidth', 1.0)
 				PLT.scatter(xdata[-1], ydata[-1], color=c_color_map[cid], s=4)
 		
-		PLT.savefig("Color_" + "{0:0>3}".format(i) + ".png", bbox_inches='tight', dpi=200)
+		PLT.savefig(dirname + os.sep + "Color" + os.sep + "Color_" + "{0:0>3}".format(i) + ".png", bbox_inches='tight', dpi=200)
 		PLT.close(fig)
 		figcnt = figcnt + 1	
 		cnt = cnt + 1
@@ -184,7 +193,7 @@ def track_cells(time):
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
 	
-		for cid in c_aXY_map.keys():
+		for cid in c_cnt_map.keys():
 		
 			prev_x = None
 			prev_y = None
@@ -197,7 +206,7 @@ def track_cells(time):
 		
 			num_velocity_vecs = 0
 		
-			for [cur_x, cur_y] in c_aXY_map[cid]:
+			for [cur_x, cur_y] in c_cnt_map[cid]:
 			
 				position_x_vec.append(cur_x)
 				position_y_vec.append(cur_y)
@@ -234,19 +243,20 @@ def track_cells(time):
 				speed = []
 				for [v_x, v_y] in zip(velocity_x_vec, velocity_y_vec):
 					inst_velocity_map[cid].append([v_x, v_y])
-					speed.append((math.hypot(v_x, v_y))*dist_conv_factor*time_conv_factor*0.5)
+					speed.append((math.hypot(v_x, v_y))*dist_conv_factor*time_conv_factor)
 				avg_speed_map[cid] = NP.mean(speed)
 	
 	
 	# Tracks color coded by speed
 	cnt = 0
-	dscale = 0.1		# drawing scale
-	c_f = 0.1			# scaling factor for velocity vector
+	if not os.path.exists(dirname + os.sep + "Speed"):
+		os.makedirs(dirname + os.sep + "Speed")
 	
 	speed = []
-	for cid in c_aXY_map.keys():
+	
+	for cid in c_cnt_map.keys():
 		for v_vec in inst_velocity_map[cid]:
-			speed.append((math.hypot(v_vec[0], v_vec[1]))*dist_conv_factor*time_conv_factor*0.5)
+			speed.append((math.hypot(v_vec[0], v_vec[1]))*dist_conv_factor*time_conv_factor)
 	
 	speed.sort()
 	
@@ -254,7 +264,7 @@ def track_cells(time):
 	cNorm  = colors.Normalize(vmin=speed[0], vmax=speed[-1])
 	scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=jet)
 	
-	lineclr = 'dodgerblue'		# dodgerblue for green channel, goldenrod for red channel 
+	lineclr = 'goldenrod'		# dodgerblue for green channel, goldenrod for red channel 
 	
 	for i in range(time, plotFrame+1):
 		
@@ -266,7 +276,12 @@ def track_cells(time):
 		axes.xaxis.tick_top()
 		axes.yaxis.tick_left()
 		
-		for cid in c_aXY_map.keys():
+		xquiverdata = []
+		yquiverdata = []
+		uquiverdata = []
+		vquiverdata = []
+		
+		for cid in c_cnt_map.keys():
 		
 			xd = []
 			yd = []
@@ -276,9 +291,9 @@ def track_cells(time):
 
 			if cnt == 0:
 				try:
-					[x, y] = c_aXY_map[cid][cnt]
-					[u, v] = inst_velocity_map[cid][cnt-2]
-					PLT.scatter(x, y, color=lineclr, s=4)
+					[x, y] = c_cnt_map[cid][cnt]
+					[u, v] = inst_velocity_map[cid][cnt]
+					PLT.scatter(x, y, color=lineclr, s=1)
 				except IndexError:
 					continue
 			else:
@@ -286,26 +301,29 @@ def track_cells(time):
 					try:
 						vx = inst_velocity_map[cid][k][0]
 						vy = inst_velocity_map[cid][k][1]
-						xd.append(c_aXY_map[cid][k][0])
-						yd.append(c_aXY_map[cid][k][1])
+						xd.append(c_cnt_map[cid][k][0])
+						yd.append(c_cnt_map[cid][k][1])
 						ud.append(vx)
 						vd.append(vy)
-						color_list.append(scalarMap.to_rgba((math.hypot(vx, vy))*dist_conv_factor*time_conv_factor*0.5))
+						color_list.append(scalarMap.to_rgba((math.hypot(vx, vy))*dist_conv_factor*time_conv_factor))
 					except IndexError:
 						break
 				try:
 					if len(xd) == cnt+1:
-						PLT.quiver(xd[-1], yd[-1], ud[-1]*c_f, vd[-1]*c_f, color=lineclr, angles='xy', scale_units='xy', scale=dscale)
-					else:
-						PLT.scatter(xd[-1], yd[-1], color=lineclr, s=4)	
-					points = NP.array([xd, yd]).T.reshape(-1, 1, 2)
-					segments = NP.concatenate([points[:-1], points[1:]], axis=1)
-					lc = MC.LineCollection(segments, colors=color_list, linewidths=1)
-					PLT.gca().add_collection(lc)
+						xquiverdata.append(xd[-1])
+						yquiverdata.append(yd[-1])
+						uquiverdata.append(ud[-1]*4.0)
+						vquiverdata.append(vd[-1]*4.0)
+						points = NP.array([xd, yd]).T.reshape(-1, 1, 2)
+						segments = NP.concatenate([points[:-1], points[1:]], axis=1)
+						lc = MC.LineCollection(segments, colors=color_list, linewidths=1)
+						PLT.gca().add_collection(lc)
 				except IndexError:
 					continue
 		
-		PLT.savefig("Velocity_" + "{0:0>3}".format(i) + ".png", bbox_inches='tight', dpi=200)
+		PLT.quiver(xquiverdata, yquiverdata, uquiverdata, vquiverdata, color=lineclr, angles='xy', scale_units='xy', scale=1)
+		
+		PLT.savefig(dirname + os.sep + "Speed" + os.sep + "Speed_" + "{0:0>3}".format(i) + ".png", bbox_inches='tight', dpi=200)
 		PLT.close(fig)
 		figcnt = figcnt + 1	
 		cnt = cnt + 1
@@ -326,11 +344,13 @@ def track_cells(time):
 	for clr in dist_hist_data.keys():
 		axarr[ind].hist(dist_hist_data[clr], bins, normed=False, cumulative=False, color=clr)
 		axarr[0].set_title('Cell Distance Travelled Histogram')
+		start, end = axarr[ind].get_ylim()
+		axarr[ind].yaxis.set_ticks(NP.arange(start, end, (end-start)/5.0))
 		ind = ind + 1
 		figcnt = figcnt + 1
 	axarr[ind-1].set_xlabel(r'Distance ($\mu m$)')
 	PLT.tight_layout()
-	PLT.savefig('DistanceHist.png')
+	PLT.savefig(dirname + os.sep + "Color" + os.sep+ "DistanceHist.png")
 	
 	fig = PLT.figure(figcnt)
 	PLT.title('Cell Displacement Histogram')
@@ -343,10 +363,16 @@ def track_cells(time):
 		if displacement_map[cid] > max_disp:
 			max_disp = displacement_map[cid]
 	bins = NP.linspace(0, max_disp, num=math.ceil(math.sqrt(len(displacement_map.keys()))))
+	ind = 0
+	disp_hist = collections.defaultdict(list)
+	histclrs = []
 	for clr in disp_hist_data.keys():
-		PLT.hist(disp_hist_data[clr], bins, normed=False, cumulative=False, color=clr)
+		disp_hist[ind] = disp_hist_data[clr]
+		histclrs.append(clr)
+		ind = ind + 1	
+	PLT.hist([disp_hist[ind] for ind in disp_hist.keys()], bins, normed=False, cumulative=False, histtype='bar', color=histclrs)
 	PLT.tight_layout()
-	PLT.savefig('DisplacementHist.png')
+	PLT.savefig(dirname + os.sep + "Color" + os.sep + "DisplacementHist.png")
 	figcnt = figcnt + 1
 	
 	fig = PLT.figure(figcnt)
@@ -360,10 +386,16 @@ def track_cells(time):
 		if avg_speed_map[cid] > max_speed:
 			max_speed = avg_speed_map[cid]
 	bins = NP.linspace(0, max_speed, num=math.ceil(math.sqrt(len(avg_speed_map.keys()))))
+	ind = 0
+	spd_hist = collections.defaultdict(list)
+	hclrs = []
 	for clr in speed_hist_data.keys():
-		PLT.hist(speed_hist_data[clr], bins, normed=False, cumulative=False, color=clr)
+		spd_hist[ind] = speed_hist_data[clr]
+		hclrs.append(clr)
+		ind = ind + 1
+	PLT.hist([spd_hist[ind] for ind in spd_hist.keys()], bins, normed=False, cumulative=False, histtype='bar', color=hclrs)
 	PLT.tight_layout()
-	PLT.savefig('SpeedHist.png')
+	PLT.savefig(dirname + os.sep + "Speed" + os.sep + "SpeedHist.png")
 	figcnt = figcnt + 1
 
 							
@@ -371,7 +403,7 @@ def track_cells(time):
 def track_all_cells(time, linereader, c_area_map, c_aXY_map, c_cmi_map, c_cnt_map, division_events):
 
 	max_frame = 0
-	cutoff = 20
+	cutoff = 500
 	
 	area_map = collections.defaultdict(list)
 	aXY_map = collections.defaultdict(list)
@@ -434,7 +466,6 @@ def track_all_cells(time, linereader, c_area_map, c_aXY_map, c_cmi_map, c_cnt_ma
 				# If cell division occurs
 				if parent_last_accessed[(parentid, t-1)] == t:
 					division_events[t-1] = [parentid, aXY_map[(parentid, t-1)][-1]]
-					# TODO:
 					# create new original id
 					# set new origin as parent
 					# pad upto time t-1 with (-1, -1)
@@ -481,6 +512,9 @@ def track_all_cells(time, linereader, c_area_map, c_aXY_map, c_cmi_map, c_cnt_ma
 
 
 # Main	
-print "RUNNING TESTS\n"
-print "Tracking time t=10\n"
-track_cells(10)
+frame = 10
+foldername = "{0:0>3}".format(frame)
+if not os.path.exists(foldername):
+	os.makedirs(foldername)
+print "Tracking time t="+str(frame)+"\n"
+track_cells(frame, foldername)
