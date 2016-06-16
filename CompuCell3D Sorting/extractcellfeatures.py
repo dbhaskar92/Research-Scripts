@@ -14,6 +14,7 @@ import matplotlib.pyplot as PLT
 from operator import itemgetter
 from scipy import interpolate
 from scipy import ndimage as NDI
+from scipy.signal import argrelextrema
 
 class ExtractFeatures:
 
@@ -45,8 +46,12 @@ class ExtractFeatures:
 
 		self.ellipse_fvector = None
 		self.ccm_fvector = None
+		self.bdy_fvector = None
 
 		self.spl_poly = None # Spline tck variables approximating 3pv-polygon
+		self.spl_u = None # Spline parameter
+		self.spl_k = None # Spline curvature
+
 
 		self.cell_to_image()
 		
@@ -81,7 +86,7 @@ class ExtractFeatures:
 		return
 		
 
-	def basic_props(self):
+	def basic_props(self, splineSmooth=10):
 	
 		'''
 		Description: Calculates the perimeter and area using basic methods. For perimeter,
@@ -100,7 +105,42 @@ class ExtractFeatures:
 		self.perim_coord_dp = skimage.measure.approximate_polygon(NP.array(self.perim_coord_poly), 0.75)
 
 		# Create cubic spline
-		self.spl_poly, _ = interpolate.splprep(NP.transpose(self.perim_coord_poly), per=1)
+		self.spl_poly, _ = interpolate.splprep(NP.transpose(self.perim_coord_poly), per=1,s=splineSmooth)
+		self.spl_u = NP.linspace(0,1.0,100)
+
+		# Calculate spline curvature
+		D1 = interpolate.splev(self.spl_u, self.spl_poly, der=1)
+		D2 = interpolate.splev(self.spl_u, self.spl_poly, der=2)
+		self.spl_k = (D1[0]*D2[1] - D1[1]*D2[0])/((D1[0]**2+D1[1]**2)**(3./2))
+
+		# Calculate boundary features
+		ksign = NP.sign(self.spl_k)
+		signchange = ((NP.roll(ksign, 1) - ksign) != 0).astype(int)
+		num_signchange = sum(signchange)
+
+		localmax = argrelextrema(self.spl_k, NP.greater)[0]
+		localmin = argrelextrema(self.spl_k, NP.less)[0]
+		num_extrema = len(localmax) + len(localmin)
+
+		posk = [n for n in self.spl_k if n > 0]
+		negk = [n for n in self.spl_k if n < 0]
+
+		# Calculate the max/min positive and negative curvatures
+		if posk:
+			maxpos = max([n for n in self.spl_k if n > 0])
+			minpos = min([n for n in self.spl_k if n > 0])
+		else:
+			maxpos = 0
+			minpos = 0
+
+		if negk:
+			maxneg = max([n for n in self.spl_k if n < 0])
+			minneg = min([n for n in self.spl_k if n < 0])
+		else:
+			maxneg = 0
+			minneg = 0
+
+		self.bdy_fvector = [maxpos, minpos, maxneg, minneg, num_extrema, num_signchange]
 
 		# Perimeter: 1 sqrt2 (function from regionprops)
 		props = skimage.measure.regionprops(self.cell_img)
