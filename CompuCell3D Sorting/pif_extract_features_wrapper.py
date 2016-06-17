@@ -28,7 +28,7 @@ parser.add_option("--start", action="store", type="int", dest="start", help="fir
 parser.add_option("--end", action="store", type="int", dest="end", help="last time to process", metavar="END")
 parser.add_option('-t', "--threads", action="store", type="int", dest="threads", help="number of threads to run", metavar="THREAD")
 parser.add_option("-o","--output", action="store", type="string", dest="outputfolder", help="the folder to store output plots", metavar="OUTPUT")
-parser.add_option('r', "--rewrite", action="store_true", dest="rewrite", help="rewrite old files", default=False)
+parser.add_option('-r', "--rewrite", action="store_true", dest="rewrite", help="rewrite old files", default=False)
 
 # Options parsing
 (options, args) = parser.parse_args()
@@ -60,11 +60,11 @@ def run_pif_extract_features(pifList):
 	for pif in pifList:
 		pifName = os.path.splitext(pif)[0]
 		pifName_nopath = pifName.split('/')[-1]
-
-		#
+		
 		boundaryFile = boundaryFolder + pifName_nopath + '_Boundary.png'
 
-		if not os.path.isfile(boundaryFile):
+		# Check if the file already exists, only run the function if the file doesn't exist yet
+		if not os.path.isfile(boundaryFile) or rewrite:
 			subprocess.call(['python', 'pif_extract_features.py',
 				'-i', pif,
 				'-o', outFolder,
@@ -101,6 +101,34 @@ for i in range(threads):
 
 	inRange = (allPifNum >= part_startTime) * (allPifNum < part_endTime)
 	pifPartition[i] = list(allPif[inRange])
+
+# Ensure output directory exist; if not create it
+if not os.path.isdir(outFolder):
+	os.mkdir(outFolder)
+
+# Ensure output folders exist; if not, create them
+circleOut = outFolder + 'CircleFit/'
+ellipseOut = outFolder + 'EllipseFit/'
+splineOut = outFolder + 'SplineFit/'
+polyOut = outFolder + 'PolyFit/'
+boundaryOut = outFolder + 'BoundaryFit/'
+vectorizeOut = outFolder + 'vectorizeFit/'
+splineBdyOut = outFolder + 'SplineBdyFit/'
+
+if not os.path.isdir(circleOut):
+	os.mkdir(circleOut)
+if not os.path.isdir(ellipseOut):
+	os.mkdir(ellipseOut)
+if not os.path.isdir(splineOut):
+	os.mkdir(splineOut)
+if not os.path.isdir(polyOut):
+	os.mkdir(polyOut)
+if not os.path.isdir(boundaryOut):
+	os.mkdir(boundaryOut)
+if not os.path.isdir(vectorizeOut):
+	os.mkdir(vectorizeOut)
+if not os.path.isdir(splineBdyOut):
+	os.mkdir(splineBdyOut)
 
 # Split the job up into the given number of threads
 thread_list = []
