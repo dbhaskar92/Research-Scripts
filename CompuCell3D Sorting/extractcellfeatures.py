@@ -18,7 +18,6 @@ from scipy.signal import argrelextrema
 
 class ExtractFeatures:
 
-
 	def __init__(self, cell_pixel_list):
 	
 		self.pix_list = cell_pixel_list
@@ -52,10 +51,12 @@ class ExtractFeatures:
 		self.spl_u = None # Spline parameter
 		self.spl_k = None # Spline curvature
 
-
 		self.cell_to_image()
-		
 
+		# Check how many connected components there are
+		s = [[1,1,1],[1,1,1],[1,1,1]] # Used to allow diagonal connections
+		_, self.connectedComp = NDI.measurements.label(self.cell_img,structure=s)
+		
 	def cell_to_image(self):
 	
 		# Find x, y coordinate bounds
@@ -95,6 +96,9 @@ class ExtractFeatures:
 
 		For 3pv perimeter: Use three-pixel vector method to compute perimeter and shape factor
 		Reference: http://www.sciencedirect.com/science/article/pii/0308912687902458
+
+		For cubic spline: Use the built-in function from scipy. Note about smoothing parameter in reference.
+		Reference: http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.interpolate.splprep.html
 		'''
 		
 		# Perimeter: 3pv and polygon perimeter (polygon from 3pv)
