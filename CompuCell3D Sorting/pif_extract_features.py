@@ -8,9 +8,12 @@
 
 import os
 import sys
+import csv
+import time
 import math
 import shlex
 import string
+import datetime
 import threading
 import subprocess
 import extractcellfeatures
@@ -27,7 +30,6 @@ from scipy.special import expit
 from matplotlib.patches import Ellipse, Polygon
 
 imgDPI = 200
-radius_thresh = 50 # Threshold value for circle radius (also used for ellipse)
 
 pifFile = None
 xmlFile = None
@@ -37,7 +39,9 @@ xmlTime = -1
 testCell = -1
 plotZoom = -1
 plotfits, comparefits, separate = None, None, None
-splineSmooth = 10
+splineSmooth = 10 # Reference: http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.interpolate.splprep.html
+
+## OPTIONS PARSING ############################################################
 
 parser = OptionParser()
 parser.add_option("-i", "--input", action="store", type="string", dest="inputfile", help="path to PIF file", metavar="PIF")
@@ -54,6 +58,7 @@ parser.add_option("-m","--multithread", action="store_true", dest="multithread",
 parser.add_option("-z","--zoom", action="store", type="int", dest="zoom", help="units to zoom in each direction", metavar="ZOOM")
 parser.add_option("-S","--smooth", action="store", type="float", dest="smooth", help="amount of smoothing for spline", metavar="SMOOTH")
 parser.add_option("-C","--curvSpline", action="store_true", dest="curvSpline", default=False, help="create plot for curvature-dependent boundary for spline", metavar="CURVSPLINE")
+parser.add_option("-v","--csv", action="store_true", dest="createcsv", default=False, help="create feature list csv")
 
 # Options parsing
 (options, args) = parser.parse_args()
@@ -95,9 +100,14 @@ if options.curvSpline:
 	curvSpline = True
 else:
 	curvSpline = False
+if options.createcsv:
+	createcsv = True
+else:
+	createcsv = False
+
+## FOLDER INITIALIZATION ######################################################
 
 plotXML = xmlFile is not None and xmlTime != -1
-
 pifFileName = ''
 
 if os.path.isfile(pifFile):
@@ -131,7 +141,8 @@ if separate:
 else:
 	circleOut = ellipseOut = splineOut = polyOut = boundaryOut = vectorizeOut = outFolder
 
-# Parse PIF file	
+## PARSE PIF FILE #############################################################
+
 lattice = open(pifFile).read().split('\n')[1:-1]
 cellDict = dict()
 cellTypeDict = dict()
@@ -162,7 +173,7 @@ for pix in lattice:
 		lattice_matrix[pix_x, pix_y] = 0x800000EE
 
 
-# Check if lattice contains isolated cells
+## HELPER FUNCTIONS ###########################################################
 
 def contains_isolated_cells():
 
@@ -188,22 +199,19 @@ def contains_isolated_cells():
 def conv_distance(x):
 	conv_factor = 0.8
 	units = 'um'
-
 	return x*conv_factor, units
 
 def conv_time(x):
 	conv_factor = 0.2
 	units = 'min'
-
 	return x*conv_factor, units
 
 def conv_area(x):
 	conv_factor = 0.64
 	units = 'um^2'
-
 	return x*conv_factor, units
 
-# Plot fits for a single cell (for testing and illustration purposes)
+## SINGLE CELL PLOT ###########################################################
 
 def TestSingleCellPlot(extractor):
 
@@ -303,7 +311,7 @@ def TestSingleCellPlot(extractor):
 	PLT.savefig(pifFileName + '_SplineCurvatureBin.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
 
 		
-# Compute features for all cells
+## COMPUTE FEATURES FOR ALL CELLS #############################################
 
 featureDict = dict()
 polyPtDict = dict()
@@ -320,6 +328,12 @@ for cell_id in cellDict.keys():
 	else:
 
 		extractor = extractcellfeatures.ExtractFeatures(cellDict[cell_id])
+
+		# If there is more than one connected component in the cell, ignore this cell
+		# since we are not able to perform circle or ellipse fits on it
+		if extractor.connectedComp > 1:
+			del cellDict[cell_id]
+			continue
 
 		if multithreading:
 			thread_list = []
@@ -351,7 +365,7 @@ for cell_id in cellDict.keys():
 		splinePtDict[cell_id] = NP.transpose(interpolate.splev(extractor.spl_u, extractor.spl_poly))
 		curvatureDict[cell_id] = extractor.spl_k
 
-# Construct featIndexDict
+## CONSTRUCT FEATINDEXDICT ####################################################
 
 featIndexDict = dict(BASIC=None, ELLIPSE=None, CCM=None, TPV=None, ERODED=None, POLY=None, BDY=None)
 BASIC_numfeat = 3
@@ -413,9 +427,9 @@ featIndexDict['BDY'] = dict(
 	num_extrema=BDY_start+4,
 	num_signflip=BDY_start+5)
 
-# Plot ellipsoid fit, cell-centre model fit, fitted polygons
-numFigs = 0;
+## PRODUCE LATTICE PLOTS WITH FITS ############################################
 
+numFigs = 0;
 if plotfits:
 
 	# Plot original cells
@@ -425,14 +439,14 @@ if plotfits:
 
 	pilImage.save(boundaryOut + pifFileName + '_Boundary.png')
 	
-	# # Plot polygonized lattice
-	# sp = None
-	# if not contains_isolated_cells():
-	# 	dirname = os.path.dirname(os.path.abspath(__file__))
-	# 	if os.path.isfile(os.path.join(dirname, 'vectorize.py')):
-	# 		cmd = "python3 vectorize.py --file " + pifFile + " --size " + str(l_width) + "," + str(l_height) + " --output " + vectorizeOut
-	# 		args = shlex.split(cmd)
-	# 		sp = subprocess.Popen(args)
+	# Plot polygonized lattice
+	sp = None
+	if not contains_isolated_cells():
+		dirname = os.path.dirname(os.path.abspath(__file__))
+		if os.path.isfile(os.path.join(dirname, 'vectorize.py')):
+			cmd = "python3 vectorize.py --file " + pifFile + " --size " + str(l_width) + "," + str(l_height) + " --output " + vectorizeOut
+			args = shlex.split(cmd)
+			sp = subprocess.Popen(args)
 
 	# Plot ellipse fits
 	numFigs += 1
@@ -449,10 +463,6 @@ if plotfits:
 	for el in ells:
 		e = el[0]
 		ctype = el[1]
-
-		# Don't plot the ellipse if it is too big
-		if (e.height > radius_thresh) or (e.width > radius_thresh):
-			continue
 
 		ax.add_artist(e)
 		e.set_clip_box(ax.bbox)
@@ -485,10 +495,6 @@ if plotfits:
 	for circle in circles:
 		c = circle[0]
 		ctype = circle[1]
-
-		# Don't plot the circle if it is too big
-		if c.radius > radius_thresh:
-			continue
 
 		ax.add_artist(c)
 		c.set_alpha(0.3)
@@ -603,11 +609,10 @@ if plotfits:
 			ax.set_ylim([0,l_height])
 		PLT.savefig(splineBdyOut + pifFileName + '_SplineBdyFit.png', bbox_inches='tight', dpi = imgDPI)
 	
-	# if sp is not None:
-	# 	sp.wait()
+	if sp is not None:
+		sp.wait()
 
-
-# Compare features
+## PRODUCE COMPARISON PLOTS ###################################################
  
 if comparefits:
 
@@ -663,7 +668,7 @@ if comparefits:
 	# Note: We switch to NP.array rather than list so we can input a list to select elements
 	perim_reorder_ind = NP.argsort(perim_1sqrt2)
 	perim_1sqrt2, perim_unit = conv_distance(NP.array(perim_1sqrt2)[perim_reorder_ind])
-	perim_ellispe, _ = conv_distance(NP.array(perim_ellipse)[perim_reorder_ind])
+	perim_ellipse, _ = conv_distance(NP.array(perim_ellipse)[perim_reorder_ind])
 	perim_circle, _ = conv_distance(NP.array(perim_circle)[perim_reorder_ind])
 	perim_poly, _ = conv_distance(NP.array(perim_poly)[perim_reorder_ind])
 	perim_eroded, _ = conv_distance(NP.array(perim_eroded)[perim_reorder_ind])
@@ -727,3 +732,109 @@ if comparefits:
 		bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=3, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
 				
 	PLT.savefig(outFolder + pifFileName + '_AreaCompare.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = imgDPI)
+
+ ## CREATE CSV FILE ###########################################################
+
+if createcsv:
+	## BUILD FEATURE LIST #########################################################
+
+	# Build location list - features not used for clustering
+	# Build feature list
+	locationList = []
+	featListOrig = []
+
+	for cell_id in cellDict.keys():
+		# cellLoc
+		cellLoc = []
+		cellLoc.append(cell_id)
+		cellLoc.append(featureDict[cell_id][featIndexDict['ELLIPSE']['centroid_x']]) 
+		cellLoc.append(featureDict[cell_id][featIndexDict['ELLIPSE']['centroid_y']])
+		cellLoc.append(featureDict[cell_id][featIndexDict['CCM']['centroid_x']])
+		cellLoc.append(featureDict[cell_id][featIndexDict['CCM']['centroid_y']])
+		locationList.append(list(cellLoc))
+
+		# Create feature vector for the cell, but remove centroids as they are in the location list
+		cellFeat = list(featureDict[cell_id])
+		cellFeat.pop(featIndexDict['CCM']['centroid_y'])
+		cellFeat.pop(featIndexDict['CCM']['centroid_x'])
+		cellFeat.pop(featIndexDict['ELLIPSE']['centroid_y'])
+		cellFeat.pop(featIndexDict['ELLIPSE']['centroid_x'])
+
+		featListOrig.append(cellFeat)
+
+	# Create location name list
+	locationNames = ['Cell_ID', 'ELLIPSE_centroid_x', 'ELLIPSE_centroid_y', 'CCM_centroid_x', 'CCM_centroid_y']
+
+	# Create feature name list
+	featNamesOrig = []
+	featNamesOrig = featNamesOrig + ['BASIC_area', 'BASIC_perimeter', 'BASIC_equiv_diameter']
+	featNamesOrig = featNamesOrig + ['TPV_perimeter']
+	featNamesOrig = featNamesOrig + ['POLY_perimeter', 'POLY_area']
+	featNamesOrig = featNamesOrig + ['ELLIPSE_eccentricity', 'ELLIPSE_euler_number', 'ELLIPSE_extent', 'ELLIPSE_major_axis_length', 'ELLIPSE_minor_axis_length', 'ELLIPSE_orientation', 'ELLIPSE_solidity', 'ELLIPSE_area', 'ELLIPSE_perimeter']
+	featNamesOrig = featNamesOrig + ['CCM_radius', 'CCM_perimeter', 'CCM_area']
+	featNamesOrig = featNamesOrig + ['ERODED_perimeter', 'ERODED_area']
+	featNamesOrig = featNamesOrig + ['BDY_maxpos', 'BDY_minpos', 'BDY_maxneg', 'BDY_minneg', 'BDY_num_extrema', 'BDY_signflip']
+	numFeat = len(featNamesOrig)
+
+	# Transpose lists and create standardized lists
+	featListOrig = list(NP.transpose(featListOrig))
+	locationList = list(NP.transpose(locationList))
+	featListStd = list(featListOrig)
+	featNamesStd = list(featNamesOrig)
+
+	# Select the index of elements to scale
+	dist_index = [1,2,3,4,9,10,14,15,16,18]
+	loc_index = [1,2,3,4]
+	area_index = [0,5,13,17,19]
+
+	for i in dist_index:
+		featListOrig[i][:], dist_unit = conv_distance(featListOrig[i][:])
+		featNamesOrig[i] = featNamesOrig[i] + '_(' + dist_unit + ')'
+
+	for i in loc_index:
+		locationList[i][:], dist_unit = conv_distance(locationList[i][:])
+		locationNames[i] = locationNames[i] + '_(' + dist_unit + ')'
+
+	for i in area_index:
+		featListOrig[i][:], area_unit = conv_area(featListOrig[i][:])
+		featNamesOrig[i] = featNamesOrig[i] + '_(' + area_unit + ')'
+
+	## STANDARDIZE FEATURES #######################################################
+
+	featListStd = NP.array(featListStd)
+	# Don't standardize the centroids
+	for k in range(numFeat):
+		featListStd[k] = (featListStd[k] - NP.mean(featListStd[k]))/NP.sqrt(NP.var(featListStd[k]))
+	featListStd = list(featListStd)
+
+	## CREATE CSV FILE ############################################################
+
+	# Put all features into a single list
+	featList = NP.transpose(locationList + featListStd + featListOrig)
+	featNamesOrig = locationNames + featNamesStd + featNamesOrig
+	numCells = len(cellDict.keys())
+	outFile = pifFileName + '.csv'
+
+	with open(outFile, 'wb') as csvfile:
+	    featWriter = csv.writer(csvfile)
+
+	    # Write the comments
+	    ts = time.time()
+	    timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+	    
+	    featWriter.writerow(['# Simulation Data Feature List'])
+	    featWriter.writerow(['# Date Created: ' + timestamp])
+	    featWriter.writerow(['# Original PIF file: ' + pifFile])
+
+	    featWriter.writerow(['# Identifier (Cell ID) Column: 0'])
+	    featWriter.writerow(['# Location (Ellipse Centroid) Columns: 1-2'])
+	    featWriter.writerow(['# Location (Circle Centroid) Columns: 3-4'])
+	    featWriter.writerow(['# Standardized Feature Columns: 5-' + str(4+numFeat)])
+	    featWriter.writerow(['# Original Feature Columns: ' + str(5+numFeat) + '-' + str(4+2*numFeat)])
+	    featWriter.writerow(['# Number of Cells: ' + str(numCells)])
+
+	    featWriter.writerow([])
+	    featWriter.writerow(featNamesOrig)
+
+	    for row in featList:
+	    	featWriter.writerow(row)
