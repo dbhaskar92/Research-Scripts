@@ -43,9 +43,10 @@ class ExtractFeatures:
 		self.equiv_diameter = None # The equivalent diameter of a circle with same area as cell
 		self.shape_factor = None
 
-		self.ellipse_fvector = None
-		self.ccm_fvector = None
-		self.bdy_fvector = None
+		self.ellipse_fvector = None # Features from ellipse fit
+		self.shape_fvector = None # Shape factors
+		self.ccm_fvector = None # Features from CCM fit
+		self.bdy_fvector = None # Features based on boundary
 
 		self.spl_poly = None # Spline tck variables approximating 3pv-polygon
 		self.spl_u = None # Spline parameter
@@ -173,32 +174,24 @@ class ExtractFeatures:
 		
 		return
 		
-		
-	def shape_factor(self):
-	
-		# TO DO: Check what shape factor gives us
-	
-		if self.perim_3pv is None:
-			perimeter(self)
-		if self.area_cell is None:
-			area(self)
-			
-		self.shape_factor = self.perim_3pv/(4*NP.pi*self.area_cell)
-		return 
-		
 
-	def ellipse_props(self):
+	def shape_props(self):
 	
 		'''
 		Description: Returns list of properties derived from fitting ellipse (in the following order)
-		centroid_x, centroid_y, eccentricity, eulerNumber, extent, majorAxisLength,
-		minorAxisLength, orientation, perimeter, solidity, ellipseArea and ellipsePerimeter.
+		centroid_x, centroid_y, eccentricity, majorAxisLength, minorAxisLength, orientation,
+		area and perimeter.
 
 		This uses regionprops() fom skimage.measure. The ellipse fit is done by
 		fitting an ellipse with the same second central moment as the image. By looking
 		at the code, this is done by calculating the inertia tensor of the matrix,
 		finding the eigenvalues (the second central moments using the principal axes),
 		and matching those with the equations for second central moment of an ellipse.
+
+		In addition, this method returns a set of shape factors such as extent, euler number,
+		solidity, compactness, elongation, convexity, and circularity.
+
+		NOTE: We assume that basic_props() has already been called.
 
 		Reference: https://en.wikipedia.org/wiki/Image_moment
 
@@ -212,19 +205,60 @@ class ExtractFeatures:
 
 		centroid = props[0].centroid
 
+		# Calculate ellipse variance
+		perim_coord = NP.transpose(self.perim_coord)
+		numPt = len(perim_coord[0])
+		cov = NP.mat(NP.cov(perim_coord))
+		V = NP.array([perim_coord[0] - centroid[0], perim_coord[1] - centroid[1]])
+		cV = NP.array(NP.linalg.inv(cov)*NP.mat(V))
+		d = NP.sqrt(V[0]*cV[0] + V[1]*cV[1])
+		mu = NP.sum(d)/numPt
+		sigma = NP.sqrt(NP.sum((d-mu)**2)/numPt)	
+
 		ellipse_prop_list = [centroid[0]]
 		ellipse_prop_list.append(centroid[1])
 		ellipse_prop_list.append(props[0].eccentricity)
-		ellipse_prop_list.append(props[0].euler_number)
-		ellipse_prop_list.append(props[0].extent) # Ratio of pixels in the region to pixels in the total bounding box
 		ellipse_prop_list.append(props[0].major_axis_length)
 		ellipse_prop_list.append(props[0].minor_axis_length)
 		ellipse_prop_list.append(props[0].orientation) # In degrees starting from the x-axis
-		ellipse_prop_list.append(props[0].solidity) # Ratio of pixels in the region to pixels of the convex hull image
-		ellipse_prop_list.append(NP.pi*ellipse_prop_list[5]*ellipse_prop_list[6]/4.0) # Ellipse area
-		ellipse_prop_list.append(2.0*ellipse_prop_list[5]*scipy.special.ellipe(ellipse_prop_list[2]**2)) # Ellipse perimeter
+		ellipse_prop_list.append(NP.pi*ellipse_prop_list[4]*ellipse_prop_list[5]/4.0) # Ellipse area
+		ellipse_prop_list.append(2.0*ellipse_prop_list[4]*scipy.special.ellipe(ellipse_prop_list[5]**2)) # Ellipse perimeter
+		ellipse_prop_list.append(sigma/mu) # Ellipse variance
 
 		self.ellipse_fvector = ellipse_prop_list
+
+		# NOTE: For shape factors, we use the perim_poly for perimeter, and pixel counting for area
+
+		# Calculate values needed for shape factors
+		inertia_ev = props[0].inertia_tensor_eigvals
+		area = self.area_cell
+		perim = self.perim_poly
+
+		# Calculate convex hull perimeter
+		cvx_img = props[0].convex_image # Find the pixels that make up the perimeter
+		eroded_cvx_img = NDI.binary_erosion(cvx_img)
+		cvx_perim_img = cvx_img - eroded_cvx_img
+		cvx_perim_img = NP.lib.pad(cvx_perim_img,(1,1),'constant') # Pad with 0's for perimeter code to work properly
+		_, cvx_perim, _ = perimeter_3pvm.perimeter_3pvm(cvx_perim_img)
+		
+	
+		# Calculate shape factors
+		# compactness = area**2/(NP.pi*2*NP.sqrt(inertia_ev[0]**2 + inertia_ev[1]**2))
+		compactness = -1 # NOTE: THIS IS SIMPLY A PLACEHOLDER AS THE COMPACTNESS IS CURRENTLY INCORRECT AS IMPLEMENTED
+		elongation = NP.sqrt(inertia_ev[1]/inertia_ev[0])
+		convexity = cvx_perim/perim
+		circularity = 4*NP.pi*area/(perim**2)
+
+		# Create shape feature vector
+		self.shape_fvector = []
+		self.shape_fvector.append(props[0].extent) # Ratio of pixels in the region to pixel in bounding box (from 0 to 1)
+		self.shape_fvector.append(props[0].euler_number) # Euler number
+		self.shape_fvector.append(props[0].solidity) # Ratio of pixels in the region to pixels of the convex hull image (from 0 to 1)
+		self.shape_fvector.append(compactness) # Ratio of squared area to magnitude of second moments (circle = 1, I-shape << 1)
+		self.shape_fvector.append(elongation) # Square root of ratio of two second moments (smaller over larger) (from 0 to 1)
+		self.shape_fvector.append(convexity) # Ratio of convex hull perimeter to perimeter (from 0 to 1)
+		self.shape_fvector.append(circularity) # Ratio of area to perimeter squared (circle = 1, starfish << 1)
+
 		return
 		
 		
@@ -236,6 +270,9 @@ class ExtractFeatures:
 
 		This uses a least-squares estimator for the circle, using the points on the boundary of the cell.
 		These points are chosen to be at the center of the boundary pixels.
+
+		Circle variance is a goodness of fit measure for the circle fit and is defined in this reference:
+		http://www.math.uci.edu/icamp/summer/research_11/park/shape_descriptors_survey.pdf 
 		'''
 
 		c_model = skimage.measure.CircleModel()
@@ -246,11 +283,19 @@ class ExtractFeatures:
 		else:									# For newer versions
 			(xc, yc, r) = c_model.params
 
+		# Calculate the circle variance
+		perim_coord = NP.transpose(self.perim_coord)
+		numPt = len(perim_coord[0])
+		d = NP.sqrt((perim_coord[0]-xc)**2 + (perim_coord[1]-yc)**2)
+		mu = NP.sum(d)/numPt
+		sigma = NP.sqrt(NP.sum((d-mu)**2)/numPt)
+
 		cell_centre_features = [xc]
 		cell_centre_features.append(yc)
 		cell_centre_features.append(r)
 		cell_centre_features.append(2*NP.pi*r)
 		cell_centre_features.append(NP.pi*r**2)
+		cell_centre_features.append(sigma/mu) # Circle variance (lower is better)
 	
 		self.ccm_fvector = cell_centre_features
 		return
