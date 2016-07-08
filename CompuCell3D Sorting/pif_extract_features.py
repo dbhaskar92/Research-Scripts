@@ -216,7 +216,7 @@ def conv_area(x):
 def TestSingleCellPlot(extractor):
 
 	extractor.basic_props(splineSmooth)
-	extractor.ellipse_props()
+	extractor.shape_props()
 	extractor.cell_centre_fit()
 
 	fixed_perim = NP.transpose(extractor.perim_img)
@@ -243,9 +243,9 @@ def TestSingleCellPlot(extractor):
 
 	# Create ellipse plot
 	e = Ellipse(xy=NP.array([extractor.ellipse_fvector[0], extractor.ellipse_fvector[1]]),
-			width = extractor.ellipse_fvector[6],
-			height = extractor.ellipse_fvector[5],
-			angle = extractor.ellipse_fvector[7]/(2*NP.pi)*360)
+			width = extractor.ellipse_fvector[4],
+			height = extractor.ellipse_fvector[3],
+			angle = extractor.ellipse_fvector[5]/(2*NP.pi)*360)
 
 	PLT.imshow(fixed_perim, interpolation='nearest', cmap='Greys')
 	PLT.plot(extractor.perim_coord_poly[:,0], extractor.perim_coord_poly[:,1], label='Poly', linewidth=3, color='g')
@@ -264,10 +264,10 @@ def TestSingleCellPlot(extractor):
 	e.set_linewidth(3)
 	e.set_label('Ellipse')
 
-	PLT.plot(0,0,color='blue',label='Circle',lw=3)
-	PLT.plot(0,0,color='orange',label='Ellipse',lw=3)
+	PLT.plot(0,0,color='blue',label='Circle (var = %.3f)'%extractor.ccm_fvector[5],lw=3)
+	PLT.plot(0,0,color='orange',label='Ellipse (var = %.3f)'%extractor.ellipse_fvector[8],lw=3)
 
-	lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=3, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
+	lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=1, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
 
 	ax.set_xlim([xlim_min, xlim_max])
 	ax.set_ylim([ylim_min, ylim_max])
@@ -318,8 +318,7 @@ polyPtDict = dict()
 splinePtDict = dict()
 curvatureDict = dict()
 
-for cell_id in cellDict.keys():
-	
+for cell_id in cellDict.keys():	
 	if testCell != -1:
 		if cell_id == testCell:
 			extractor = extractcellfeatures.ExtractFeatures(cellDict[cell_id])
@@ -339,7 +338,7 @@ for cell_id in cellDict.keys():
 			thread_list = []
 
 			thread_list.append(threading.Thread(target=extractor.basic_props(splineSmooth), args=(), kwargs={}))
-			thread_list.append(threading.Thread(target=extractor.ellipse_props(), args=(), kwargs={}))
+			thread_list.append(threading.Thread(target=extractor.shape_props(), args=(), kwargs={}))
 			thread_list.append(threading.Thread(target=extractor.cell_centre_fit(), args=(), kwargs={}))
 		
 			for thread in thread_list:
@@ -349,7 +348,7 @@ for cell_id in cellDict.keys():
 				thread.join()
 		else:
 			extractor.basic_props(splineSmooth)
-			extractor.ellipse_props()
+			extractor.shape_props()
 			extractor.cell_centre_fit()
 	
 		featureDict[cell_id] = [extractor.area_cell, extractor.perim_1sqrt2, extractor.equiv_diameter]
@@ -358,8 +357,13 @@ for cell_id in cellDict.keys():
 		featureDict[cell_id] = featureDict[cell_id] + extractor.ellipse_fvector + extractor.ccm_fvector
 		featureDict[cell_id] = featureDict[cell_id] + [extractor.perim_eroded,  extractor.area_eroded]
 		featureDict[cell_id] = featureDict[cell_id] + extractor.bdy_fvector
+		featureDict[cell_id] = featureDict[cell_id] + extractor.shape_fvector
 
 		polyPtDict[cell_id] = extractor.perim_coord_poly
+
+		# Generate warning if euler number is less than 1:
+		if(extractor.shape_fvector[1] < 1):
+			print('Warning: Cell ' + str(int(cell_id)) + ' has Euler number less than 1.')
 
 		# Put spline points and curvature data to be used in plots
 		splinePtDict[cell_id] = NP.transpose(interpolate.splev(extractor.spl_u, extractor.spl_poly))
@@ -367,14 +371,15 @@ for cell_id in cellDict.keys():
 
 ## CONSTRUCT FEATINDEXDICT ####################################################
 
-featIndexDict = dict(BASIC=None, ELLIPSE=None, CCM=None, TPV=None, ERODED=None, POLY=None, BDY=None)
+featIndexDict = dict(BASIC=None, ELLIPSE=None, CCM=None, TPV=None, ERODED=None, POLY=None, BDY=None, SHAPE=None)
 BASIC_numfeat = 3
 TPV_numfeat = 1
 POLY_numfeat = 2
-ELLIPSE_numfeat = 11
-CCM_numfeat = 5
+ELLIPSE_numfeat = 9
+CCM_numfeat = 6
 ERODED_numfeat = 2
 BDY_numfeat = 6
+SHAPE_numfeat = 7
 
 TPV_start = BASIC_numfeat
 POLY_start = TPV_start + TPV_numfeat
@@ -382,6 +387,7 @@ ELLIPSE_start = POLY_start + POLY_numfeat
 CCM_start = ELLIPSE_start + ELLIPSE_numfeat
 ERODED_start = CCM_start + CCM_numfeat
 BDY_start = ERODED_start + ERODED_numfeat
+SHAPE_start = BDY_start + BDY_numfeat
 
 featIndexDict['BASIC'] = dict(
 	area = 0,
@@ -399,21 +405,20 @@ featIndexDict['ELLIPSE'] = dict(
 	centroid_x=ELLIPSE_start, 
 	centroid_y=ELLIPSE_start+1,
 	eccentricity=ELLIPSE_start+2,
-	euler_number=ELLIPSE_start+3,
-	extent=ELLIPSE_start+4,
-	major_axis_length=ELLIPSE_start+5,
-	minor_axis_length=ELLIPSE_start+6,
-	orientation=ELLIPSE_start+7,
-	solidity=ELLIPSE_start+8,
-	area=ELLIPSE_start+9,
-	perimeter=ELLIPSE_start+10)
+	major_axis_length=ELLIPSE_start+3,
+	minor_axis_length=ELLIPSE_start+4,
+	orientation=ELLIPSE_start+5,
+	area=ELLIPSE_start+6,
+	perimeter=ELLIPSE_start+7,
+	variance=ELLIPSE_start+8)
 	
 featIndexDict['CCM'] = dict(
 	centroid_x=CCM_start,
 	centroid_y=CCM_start+1,
 	radius=CCM_start+2,
 	perimeter=CCM_start+3,
-	area=CCM_start+4)
+	area=CCM_start+4,
+	variance=CCM_start+5)
 	
 featIndexDict['ERODED'] = dict(
 	perimeter=ERODED_start,
@@ -426,6 +431,15 @@ featIndexDict['BDY'] = dict(
 	minneg=BDY_start+3,
 	num_extrema=BDY_start+4,
 	num_signflip=BDY_start+5)
+
+featIndexDict['SHAPE'] = dict(
+	extent=SHAPE_start,
+	euler_number=SHAPE_start+1,
+	solidity=SHAPE_start+2,
+	compactness=SHAPE_start+3,
+	elongation=SHAPE_start+4,
+	convexity=SHAPE_start+5,
+	circularity=SHAPE_start+6)
 
 ## PRODUCE LATTICE PLOTS WITH FITS ############################################
 
@@ -741,6 +755,7 @@ if createcsv:
 	# Build location list - features not used for clustering
 	# Build feature list
 	locationList = []
+	nondimList = []
 	featListOrig = []
 
 	for cell_id in cellDict.keys():
@@ -753,8 +768,29 @@ if createcsv:
 		cellLoc.append(featureDict[cell_id][featIndexDict['CCM']['centroid_y']])
 		locationList.append(list(cellLoc))
 
+		# cellNondim
+		cellNondim = []
+		cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['extent']])
+		cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['euler_number']])
+		cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['solidity']])
+		cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['compactness']])
+		cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['elongation']])
+		cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['convexity']])
+		cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['circularity']])
+		nondimList.append(list(cellNondim))
+
 		# Create feature vector for the cell, but remove centroids as they are in the location list
+		# Also remove nondimensional shape factors
 		cellFeat = list(featureDict[cell_id])
+
+		cellFeat.pop(featIndexDict['SHAPE']['circularity'])
+		cellFeat.pop(featIndexDict['SHAPE']['convexity'])
+		cellFeat.pop(featIndexDict['SHAPE']['elongation'])
+		cellFeat.pop(featIndexDict['SHAPE']['compactness'])
+		cellFeat.pop(featIndexDict['SHAPE']['solidity'])
+		cellFeat.pop(featIndexDict['SHAPE']['euler_number'])
+		cellFeat.pop(featIndexDict['SHAPE']['extent'])
+
 		cellFeat.pop(featIndexDict['CCM']['centroid_y'])
 		cellFeat.pop(featIndexDict['CCM']['centroid_x'])
 		cellFeat.pop(featIndexDict['ELLIPSE']['centroid_y'])
@@ -765,13 +801,16 @@ if createcsv:
 	# Create location name list
 	locationNames = ['Cell_ID', 'ELLIPSE_centroid_x', 'ELLIPSE_centroid_y', 'CCM_centroid_x', 'CCM_centroid_y']
 
+	# Create nondimensional factors name list
+	nondimNames = ['SHAPE_extent', 'SHAPE_euler_number', 'SHAPE_solidity', 'SHAPE_compactness', 'SHAPE_elongation', 'SHAPE_convexity', 'SHAPE_circularity']
+
 	# Create feature name list
 	featNamesOrig = []
 	featNamesOrig = featNamesOrig + ['BASIC_area', 'BASIC_perimeter', 'BASIC_equiv_diameter']
 	featNamesOrig = featNamesOrig + ['TPV_perimeter']
 	featNamesOrig = featNamesOrig + ['POLY_perimeter', 'POLY_area']
-	featNamesOrig = featNamesOrig + ['ELLIPSE_eccentricity', 'ELLIPSE_euler_number', 'ELLIPSE_extent', 'ELLIPSE_major_axis_length', 'ELLIPSE_minor_axis_length', 'ELLIPSE_orientation', 'ELLIPSE_solidity', 'ELLIPSE_area', 'ELLIPSE_perimeter']
-	featNamesOrig = featNamesOrig + ['CCM_radius', 'CCM_perimeter', 'CCM_area']
+	featNamesOrig = featNamesOrig + ['ELLIPSE_eccentricity', 'ELLIPSE_major_axis_length', 'ELLIPSE_minor_axis_length', 'ELLIPSE_orientation', 'ELLIPSE_area', 'ELLIPSE_perimeter', 'ELLIPSE_variance']
+	featNamesOrig = featNamesOrig + ['CCM_radius', 'CCM_perimeter', 'CCM_area', 'CCM_variance']
 	featNamesOrig = featNamesOrig + ['ERODED_perimeter', 'ERODED_area']
 	featNamesOrig = featNamesOrig + ['BDY_maxpos', 'BDY_minpos', 'BDY_maxneg', 'BDY_minneg', 'BDY_num_extrema', 'BDY_signflip']
 	numFeat = len(featNamesOrig)
@@ -779,13 +818,14 @@ if createcsv:
 	# Transpose lists and create standardized lists
 	featListOrig = list(NP.transpose(featListOrig))
 	locationList = list(NP.transpose(locationList))
+	nondimList = list(NP.transpose(nondimList))
 	featListStd = list(featListOrig)
 	featNamesStd = list(featNamesOrig)
 
 	# Select the index of elements to scale
-	dist_index = [1,2,3,4,9,10,14,15,16,18]
+	dist_index = [1,2,3,4,7,8,11,13,14,17]
 	loc_index = [1,2,3,4]
-	area_index = [0,5,13,17,19]
+	area_index = [0,5,10,15,18]
 
 	for i in dist_index:
 		featListOrig[i][:], dist_unit = conv_distance(featListOrig[i][:])
@@ -810,8 +850,8 @@ if createcsv:
 	## CREATE CSV FILE ############################################################
 
 	# Put all features into a single list
-	featList = NP.transpose(locationList + featListStd + featListOrig)
-	featNamesOrig = locationNames + featNamesStd + featNamesOrig
+	featList = NP.transpose(locationList + nondimList + featListStd + featListOrig)
+	featNamesOrig = locationNames + nondimNames + featNamesStd + featNamesOrig
 	numCells = len(cellDict.keys())
 	outFile = pifFileName + '.csv'
 
@@ -829,8 +869,9 @@ if createcsv:
 	    featWriter.writerow(['# Identifier (Cell ID) Column: 0'])
 	    featWriter.writerow(['# Location (Ellipse Centroid) Columns: 1-2'])
 	    featWriter.writerow(['# Location (Circle Centroid) Columns: 3-4'])
-	    featWriter.writerow(['# Standardized Feature Columns: 5-' + str(4+numFeat)])
-	    featWriter.writerow(['# Original Feature Columns: ' + str(5+numFeat) + '-' + str(4+2*numFeat)])
+	    featWriter.writerow(['# Nondimensional (Shape Factor) Columns: 5-11'])
+	    featWriter.writerow(['# Standardized Feature Columns: 12-' + str(11+numFeat)])
+	    featWriter.writerow(['# Original Feature Columns: ' + str(12+numFeat) + '-' + str(11+2*numFeat)])
 	    featWriter.writerow(['# Number of Cells: ' + str(numCells)])
 
 	    featWriter.writerow([])
