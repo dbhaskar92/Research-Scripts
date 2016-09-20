@@ -57,8 +57,8 @@ for i = 1 : length(phaseImgs)
 
 	output_name = regexprep(regexprep(strcat(name,ext),'_ch\d+',''),'-\d+-\d+','');
 	
-	imwrite(Isegred,strcat('LUT-Red-Enhanced',filesep,Igreenfname,'.png'));
-	imwrite(Iseggreen,strcat('LUT-Green-Enhanced',filesep,Iredfname,'.png'));
+	imwrite(Isegred,strcat('LUT-Red-Enhanced',filesep,Iredfname,'.png'));
+	imwrite(Iseggreen,strcat('LUT-Green-Enhanced',filesep,Igreenfname,'.png'));
 	
 	v1 = addframe(v1,Isegred);
 	v2 = addframe(v2,Iseggreen);
