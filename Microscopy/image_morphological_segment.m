@@ -23,9 +23,6 @@ function [BWeroded, BWoutline] = image_morphological_segment(path)
 	fudgeFactor = 1;
 	BWs = edge(I,'sobel', threshold * fudgeFactor);
     
-    % alternate method:
-    % BWs = (gradmag > prctile(reshape(gradmag,[1,numel(gradmag)]), 95));
-    
 	se90 = strel('line', 6, 90);
 	se0 = strel('line', 6, 0);
     se45 = strel('line', 6, 45);
