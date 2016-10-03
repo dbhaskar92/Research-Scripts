@@ -1,53 +1,62 @@
 %
-% Determine outline of cancer cell lines using edge detection (derivative filter) and mathematical morphology 
-% Author: Dhananjay Bhaskar
-% Last Modified: Sept 27, 2016 
+% Author: Dhananjay Bhaskar <dbhaskar92@math.ubc.ca>
+% Last Modified: Sept 30, 2016
+% Determine outline of cancer cell lines using edge detection (derivative filter) and mathematical morphology
+% Tested on MATLAB R2011a
 %
 
-function [res] = image_morphological_segment(path)
+function [BWeroded, BWoutline] = image_morphological_segment(path)
 
 	I = imread(path);
     
-	I = rgb2gray(I);
-	
-    figure
+    if size(I,3) == 3
+        I = rgb2gray(I);
+    end
     
 	hy = fspecial('sobel');
 	hx = hy';
 	Iy = imfilter(double(I), hy, 'replicate');
 	Ix = imfilter(double(I), hx, 'replicate');
 	gradmag = sqrt(Ix.^2 + Iy.^2);
-    subplot(2,3,1), imshow(gradmag,[]), title('Gradient magnitude')
-
+    
 	[~, threshold] = edge(I, 'sobel');
 	fudgeFactor = 1;
 	BWs = edge(I,'sobel', threshold * fudgeFactor);
-    subplot(2,3,2), imshow(BWs), title('Sobel filter thresholding')
+    
+    % alternate method:
+    % BWs = (gradmag > prctile(reshape(gradmag,[1,numel(gradmag)]), 95));
     
 	se90 = strel('line', 6, 90);
 	se0 = strel('line', 6, 0);
     se45 = strel('line', 6, 45);
     se135 = strel('line', 6, 135);
-
+    
 	BWsdil = imdilate(BWs, [se90 se0 se45 se135]);
 	BWdfill = imfill(BWsdil, 'holes');
-    subplot(2,3,3), imshow(BWsdil), title('Dilated and filled')
 
+    % remove border objects and artifacts
 	BWnobord = imclearborder(BWdfill, 4);
     BWnobord = bwareaopen(BWnobord, 1000);
-    subplot(2,3,4), imshow(BWnobord), title('Clear border and small objects')
     
+    % smoothing
 	seD = strel('diamond',1);
-	BWfinal = imerode(BWnobord,seD);
-	BWfinal = imerode(BWfinal,seD);
-    subplot(2,3,5), imshow(BWfinal), title('Eroded binary image')
+	BWeroded = imerode(BWnobord,seD);
+	BWeroded = imerode(BWeroded,seD);
 
-	BWoutline = bwperim(BWfinal);
+	BWoutline = bwperim(BWeroded);
 	
     sedisk = strel('disk', 2);
     BWoutlinedilated = imdilate(BWoutline, sedisk);
     Segout = I;
 	Segout(BWoutlinedilated) = 255;
-    subplot(2,3,6), imshow(Segout), title('Super-impose outline')
     
-    res = imerode(BWfinal, sedisk);
+    if (usejava('desktop') == 1)
+        figure
+        subplot(2,3,1), imshow(gradmag,[]), title('Gradient magnitude')
+        subplot(2,3,2), imshow(BWs), title('Sobel filter thresholding')
+        subplot(2,3,3), imshow(BWsdil), title('Dilated and filled')
+        subplot(2,3,4), imshow(BWnobord), title('Clear border and small objects')
+        subplot(2,3,5), imshow(BWeroded), title('Eroded binary image')
+        subplot(2,3,6), imshow(Segout), title('Super-impose outline')
+    end
+end
