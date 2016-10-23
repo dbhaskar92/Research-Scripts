@@ -17,13 +17,14 @@ function [] = single_channel_segment()
 		% edge detection using mathematical morphology
 		[mm_fg, mm_outline, nfigs] = morphological_segment(MIAPaCa_6, 1, 6, 1000, nfigs, display);
 		% compute foreground markers
-		foreground_markers = mm_fg;
+		foreground_markers = zeros(size(mm_fg,1), size(mm_fg,2));
+		foreground_markers(mm_fg > 0) = 1;
 		sedisk = strel('disk', 4);
 		for i = 1 : 10
 			foreground_markers = imerode(foreground_markers, sedisk);
 		end
 		foreground_markers = bwareaopen(foreground_markers, 10);
-		% manual watershed
+		% marker-based watershed
 		[w_cells, w_borders, nfigs] = watershed_segment(MIAPaCa_6, foreground_markers, nfigs, display);
 		% opening by reconstruction and closing by reconstruction watershed
 		[wobrcbr_cells, wobrcbr_borders, nfigs] = watershed_obrcbr_segment(MIAPaCa_6, 15, 10, 1000, nfigs, display);
@@ -38,13 +39,14 @@ function [] = single_channel_segment()
 		% edge detection using mathematical morphology
 		[mm_fg, mm_outline, nfigs] = morphological_segment(MIAPaCa_3, 1, 6, 1000, nfigs, display);
 		% compute foreground markers
-		foreground_markers = mm_fg;
+		foreground_markers = zeros(size(mm_fg,1), size(mm_fg,2));
+		foreground_markers(mm_fg > 0) = 1;
 		sedisk = strel('disk', 4);
 		for i = 1 : 6
 			foreground_markers = imerode(foreground_markers, sedisk);
 		end
 		foreground_markers = bwareaopen(foreground_markers, 10);
-		% manual watershed
+		% marker-based watershed
 		[w_cells, w_borders, nfigs] = watershed_segment(MIAPaCa_3, foreground_markers, nfigs, display);
 		% opening by reconstruction and closing by reconstruction watershed
 		[wobrcbr_cells, wobrcbr_borders, nfigs] = watershed_obrcbr_segment(MIAPaCa_3, 15, 10, 1000, nfigs, display);
@@ -103,8 +105,18 @@ function [foreground, outline, fig_cnt] = morphological_segment(path, fudgefacto
 	end
 
 	% label foreground and outline
-	foreground = BWeroded;
-	outline = BWoutline;
+	cc = bwconncomp(BWeroded);
+	L = labelmatrix(cc);
+	
+	classes = numel(unique(reshape(L, [1, numel(L)])));
+	labelled_borders = zeros(size(L,1), size(L,2));
+	labelled_cells = zeros(size(L,1), size(L,2));
+	for i = 1 : classes
+		tmp = zeros(size(L,1), size(L,2));
+		tmp(L == i) = 1;
+		labelled_cells(L == i) = i;
+		labelled_borders(bwperim(tmp) > 0) = i;
+	end
     
 end
 
@@ -153,7 +165,7 @@ function [labelled_cells, labelled_borders, fig_cnt] = watershed_segment(path, f
 	classes = numel(unique(reshape(L, [1, numel(L)])));
 	labelled_borders = zeros(size(L,1), size(L,2));
 	labelled_cells = zeros(size(L,1), size(L,2));
-	for i = 1 : classes-1
+	for i = 1 : classes
 		tmp = zeros(size(L,1), size(L,2));
 		tmp(L == i) = 1;
 		labelled_cells(L == i) = i;
@@ -238,7 +250,7 @@ function [labelled_cells, labelled_borders, fig_cnt] = watershed_obrcbr_segment(
 	classes = numel(unique(reshape(L, [1, numel(L)])));
 	labelled_borders = zeros(size(L,1), size(L,2));
 	labelled_cells = zeros(size(L,1), size(L,2));
-	for i = 1 : classes-1
+	for i = 1 : classes
 		tmp = zeros(size(L,1), size(L,2));
 		tmp(L == i) = 1;
 		labelled_cells(L == i) = i;
@@ -252,20 +264,20 @@ end
 %% Plot results
 function [fig_cnt] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, fig_cnt)
 
-	mm_fg_color = label2rgb(mm_fg, 'jet', 'w', 'shuffle');
-	mm_outline_color = label2rgb(mm_outline, 'jet', 'w', 'shuffle');
-	w_cells_color  = label2rgb(w_cells, 'jet', 'w', 'shuffle');
-	w_borders_color   = label2rgb(w_borders, 'jet', 'w', 'shuffle');
-	wobrcbr_cells_color = label2rgb(wobrcbr_cells, 'jet', 'w', 'shuffle');
-	wobrcbr_borders_color = label2rgb(wobrcbr_borders, 'jet', 'w', 'shuffle');
+	mm_fg_color = label2rgb(mm_fg, 'jet', [.7 .7 .7], 'shuffle');
+	mm_outline_color = label2rgb(imdilate(mm_outline, ones(3,3)), 'jet', [.7 .7 .7], 'shuffle');
+	w_cells_color = label2rgb(w_cells, 'jet', [.7 .7 .7], 'shuffle');
+	w_borders_color = label2rgb(imdilate(w_borders, ones(3,3)), 'jet', [.7 .7 .7], 'shuffle');
+	wobrcbr_cells_color = label2rgb(wobrcbr_cells, 'jet', [.7 .7 .7], 'shuffle');
+	wobrcbr_borders_color = label2rgb(imdilate(wobrcbr_borders, ones(3,3)), 'jet', [.7 .7 .7], 'shuffle');
 
 	figure(fig_cnt)
-	subplot(3,2,1), imshow(mm_fg_color), title('MM Foreground')
-	subplot(3,2,2), imshow(mm_outline_color), title('MM Outline')
-	subplot(3,2,3), imshow(w_cells_color), title('Watershed (Manual) Foreground')
-	subplot(3,2,4), imshow(w_borders_color), title('Watershed (Manual) Outlines')
-	subplot(3,2,5), imshow(wobrcbr_cells_color), title('Watershed (OBRCBR) Foreground')
-	subplot(3,2,6), imshow(wobrcbr_borders_color), title('Watershed (OBRCBR) Outlines')
+	subplot(2,3,1), imshow(mm_fg_color), title('MM Foreground')
+	subplot(2,3,2), imshow(w_cells_color), title('Watershed (Marker) Foreground')
+	subplot(2,3,3), imshow(wobrcbr_cells_color), title('Watershed (OBRCBR) Foreground')
+	subplot(2,3,4), imshow(mm_outline_color), title('MM Outline')
+	subplot(2,3,5), imshow(w_borders_color), title('Watershed (Marker) Outlines')
+	subplot(2,3,6), imshow(wobrcbr_borders_color), title('Watershed (OBRCBR) Outlines')
 	fig_cnt = fig_cnt + 1;
 
 end
