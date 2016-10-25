@@ -1,6 +1,6 @@
 %{ 
 %   Author: Dhananjay Bhaskar <dbhaskar92@math.ubc.ca>
-%   Last modified: Oct 02, 2016
+%   Last modified: Oct 23, 2016
 %   Description: Segment cancer cell line images (Phase contrast microscopy)
 %   Tested on MATLAB R2011a
 %}
@@ -11,7 +11,7 @@ function [] = single_channel_segment()
 	nfigs = 1;
 
 	test_1(nfigs, 1);
-	
+    
 	function [nfigs] = test_1(nfigs, display)
 		MIAPaCa_6 = 'MIAPaCa_6.JPG';
 		% edge detection using mathematical morphology
@@ -30,8 +30,9 @@ function [] = single_channel_segment()
 		[wobrcbr_cells, wobrcbr_borders, nfigs] = watershed_obrcbr_segment(MIAPaCa_6, 15, 10, 1000, nfigs, display);
 		% plot results
 		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, nfigs);
-		% save best result
-		%save('MIAPaCa_6_segmented.mat', w_cells);
+		% save correct segmentations
+		save_segmentation('MIAPaCa_6_segmented.mat', [2 4 6 12 15 21 23 25 35 38 39 40 42], w_cells);
+		save_segmentation('MIAPaCa_6_segmented.mat', [16 19 20], wobrcbr_cells);
 	end
     
 	function [nfigs] = test_2(nfigs, display)
@@ -52,20 +53,21 @@ function [] = single_channel_segment()
 		[wobrcbr_cells, wobrcbr_borders, nfigs] = watershed_obrcbr_segment(MIAPaCa_3, 15, 10, 1000, nfigs, display);
 		% plot results
 		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, nfigs);
-		% save best result
-		%save('MIAPaCa_3_segmented.mat', wobrcbr_borders);
+		% save correct segmentations
+		save_segmentation('MIAPaCa_3_segmented.mat', [10 12 17 26], mm_fg);
+		save_segmentation('MIAPaCa_3_segmented.mat', [20 33], w_cells);
 	end
     
 end
 
 %% Mathematical Morphology Segmentation
-function [foreground, outline, fig_cnt] = morphological_segment(path, fudgefactor, selength, minobjsize, fig_cnt, disp)
+function [labelled_cells, labelled_borders, fig_cnt] = morphological_segment(path, fudgefactor, selength, minobjsize, fig_cnt, disp)
 
 	I = imread(path);
 	if size(I, 3) == 3
 		I = rgb2gray(I);
 	end
-
+    
 	[~, threshold] = edge(I, 'sobel');
 	BWs = edge(I, 'sobel', threshold * fudgefactor);
 
@@ -107,17 +109,17 @@ function [foreground, outline, fig_cnt] = morphological_segment(path, fudgefacto
 	% label foreground and outline
 	cc = bwconncomp(BWeroded);
 	L = labelmatrix(cc);
-	
+
 	classes = numel(unique(reshape(L, [1, numel(L)])));
 	labelled_borders = zeros(size(L,1), size(L,2));
 	labelled_cells = zeros(size(L,1), size(L,2));
-	for i = 1 : classes
+	for i = 1 : classes-1
 		tmp = zeros(size(L,1), size(L,2));
 		tmp(L == i) = 1;
 		labelled_cells(L == i) = i;
 		labelled_borders(bwperim(tmp) > 0) = i;
 	end
-    
+
 end
 
 %% Watershed segmentation using supplied foreground markers
@@ -151,8 +153,8 @@ function [labelled_cells, labelled_borders, fig_cnt] = watershed_segment(path, f
 	watershed_boundary = I;
 	watershed_boundary(imdilate(L == 0, ones(3, 3))) = 255;
 
-	Lrgb = label2rgb(L, 'jet', 'w', 'shuffle');
-    
+	Lrgb = label2rgb(L, 'jet', 'k', 'shuffle');
+
 	if (usejava('desktop') == 1 && disp == 1)
 		figure(fig_cnt)
 		subplot(2,2,1), imshow(foreground_markers), title('Foreground markers')
@@ -165,7 +167,7 @@ function [labelled_cells, labelled_borders, fig_cnt] = watershed_segment(path, f
 	classes = numel(unique(reshape(L, [1, numel(L)])));
 	labelled_borders = zeros(size(L,1), size(L,2));
 	labelled_cells = zeros(size(L,1), size(L,2));
-	for i = 1 : classes
+	for i = 1 : classes-1
 		tmp = zeros(size(L,1), size(L,2));
 		tmp(L == i) = 1;
 		labelled_cells(L == i) = i;
@@ -200,7 +202,7 @@ function [labelled_cells, labelled_borders, fig_cnt] = watershed_obrcbr_segment(
 	Iobrd = imdilate(Iobr, se);
 	Iobrcbr = imreconstruct(imcomplement(Iobrd), imcomplement(Iobr));
 	Iobrcbr = imcomplement(Iobrcbr);
-    
+
 	% regional maxima of opening-closing by reconstruction (fgm)
 	fgm = zeros(size(Iobrcbr,1), size(Iobrcbr,2));
 	if size(imread(path),3) == 3
@@ -210,7 +212,7 @@ function [labelled_cells, labelled_borders, fig_cnt] = watershed_obrcbr_segment(
 		%fgm = imregionalmax(Iobrcbr);
 		fgm(Iobrcbr > prctile(reshape(Iobrcbr,[1,numel(Iobrcbr)]), 100-thresh_prc)) = 1;
 	end
-
+    
 	% shrink and remove stray pixels
 	se2 = strel(ones(5,5));
 	fgm2 = imclose(fgm, se2);
@@ -234,7 +236,7 @@ function [labelled_cells, labelled_borders, fig_cnt] = watershed_obrcbr_segment(
 	watershed_boundary = I;
 	watershed_boundary(imdilate(L == 0, ones(3, 3))) = 255;
 
-	Lrgb = label2rgb(L, 'jet', 'w', 'shuffle');
+	Lrgb = label2rgb(L, 'jet', 'k', 'shuffle');
 
 	if (usejava('desktop') == 1 && disp == 1)
 		figure(fig_cnt)
@@ -246,11 +248,11 @@ function [labelled_cells, labelled_borders, fig_cnt] = watershed_obrcbr_segment(
 		subplot(2,3,6), imshow(Lrgb), title('Colored watershed label')
 		fig_cnt = fig_cnt + 1;
 	end
-    
+
 	classes = numel(unique(reshape(L, [1, numel(L)])));
 	labelled_borders = zeros(size(L,1), size(L,2));
 	labelled_cells = zeros(size(L,1), size(L,2));
-	for i = 1 : classes
+	for i = 1 : classes-1
 		tmp = zeros(size(L,1), size(L,2));
 		tmp(L == i) = 1;
 		labelled_cells(L == i) = i;
@@ -258,7 +260,7 @@ function [labelled_cells, labelled_borders, fig_cnt] = watershed_obrcbr_segment(
 	end
 	labelled_borders(labelled_borders == mode(labelled_borders(labelled_borders~=0))) = 0;
 	labelled_cells(labelled_cells == mode(labelled_cells(labelled_cells~=0))) = 0;
-
+    
 end
 
 %% Plot results
@@ -272,12 +274,77 @@ function [fig_cnt] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr
 	wobrcbr_borders_color = label2rgb(imdilate(wobrcbr_borders, ones(3,3)), 'jet', [.7 .7 .7], 'shuffle');
 
 	figure(fig_cnt)
+
 	subplot(2,3,1), imshow(mm_fg_color), title('MM Foreground')
 	subplot(2,3,2), imshow(w_cells_color), title('Watershed (Marker) Foreground')
 	subplot(2,3,3), imshow(wobrcbr_cells_color), title('Watershed (OBRCBR) Foreground')
+    
 	subplot(2,3,4), imshow(mm_outline_color), title('MM Outline')
+	classes = numel(unique(reshape(mm_fg, [1, numel(mm_fg)])));
+	for i = 1 : classes-1
+		tmp = zeros(size(mm_fg,1), size(mm_fg,2));
+		tmp(mm_fg == i) = 1;
+		struct_array = regionprops(tmp, 'centroid');
+		if ~isempty(struct_array) && isfield(struct_array, 'Centroid')
+			if ~isempty(struct_array.Centroid) && numel(extractfield(struct_array, 'Centroid')) == 2
+				centroid = cat(1, struct_array.Centroid);
+				txt = text(centroid(1), centroid(2), int2str(i));
+				set(txt, 'fontsize', 5);
+			end
+		end
+	end
+    
 	subplot(2,3,5), imshow(w_borders_color), title('Watershed (Marker) Outlines')
-	subplot(2,3,6), imshow(wobrcbr_borders_color), title('Watershed (OBRCBR) Outlines')
-	fig_cnt = fig_cnt + 1;
+	classes = numel(unique(reshape(w_cells, [1, numel(w_cells)])));
+	for i = 1 : classes-1
+		tmp = zeros(size(w_cells,1), size(w_cells,2));
+		tmp(w_cells == i) = 1;
+		struct_array = regionprops(tmp, 'centroid');
+		if ~isempty(struct_array) && isfield(struct_array, 'Centroid')
+			if ~isempty(struct_array.Centroid) && numel(extractfield(struct_array, 'Centroid')) == 2
+				centroid = cat(1, struct_array.Centroid);
+				txt = text(centroid(1), centroid(2), int2str(i));
+				set(txt, 'fontsize', 5);
+			end
+		end
+	end
 
+	subplot(2,3,6), imshow(wobrcbr_borders_color), title('Watershed (OBRCBR) Outlines')
+	classes = numel(unique(reshape(wobrcbr_cells, [1, numel(wobrcbr_cells)])));
+	for i = 1 : classes-1
+		tmp = zeros(size(wobrcbr_cells,1), size(wobrcbr_cells,2));
+		tmp(wobrcbr_cells == i) = 1;
+		struct_array = regionprops(tmp, 'centroid');
+		if ~isempty(struct_array) && isfield(struct_array, 'Centroid')
+			if ~isempty(struct_array.Centroid) && numel(extractfield(struct_array, 'Centroid')) == 2
+				centroid = cat(1, struct_array.Centroid);
+				txt = text(centroid(1), centroid(2), int2str(i));
+				set(txt, 'fontsize', 5);
+			end
+		end
+	end
+
+	fig_cnt = fig_cnt + 1;
+    
+end
+
+%% Save segmentation
+function save_segmentation(filename, cell_labels, labelled_image)
+
+	segmentations = zeros(size(labelled_image,1), size(labelled_image,2));
+
+	if exist(filename, 'file')
+	   load(filename, 'segmentations');
+	   assert(isequal(size(segmentations),size(labelled_image)), 'Matrix dimensions do not match.');  
+	end
+
+	num_correct_segmentations = numel(cell_labels);
+
+	for i = 1 : num_correct_segmentations
+		class = cell_labels(i);
+		segmentations(labelled_image == class) = i;
+	end
+
+	save(filename, 'segmentations');
+	
 end
