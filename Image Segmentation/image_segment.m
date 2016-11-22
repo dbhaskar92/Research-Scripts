@@ -10,7 +10,7 @@ function [] = image_segment()
     
 	nfigs = 1;
 
-	test_1(nfigs, 1);
+	test_12(nfigs, 1);
 
 	function [nfigs] = test_1(nfigs, display)
 		MIAPaCa_6 = 'MIAPaCa_6.JPG';
@@ -31,9 +31,9 @@ function [] = image_segment()
 		% plot results
 		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_6', nfigs);
 		% save correct segmentations
-		save_segmentation('MIAPaCa_6_segmented.mat', [2 4 6 12 15 21 23 25 35 38 39 40 42], w_cells);
-		save_segmentation('MIAPaCa_6_segmented.mat', [16 19 20], wobrcbr_cells);
-		save_PIF('MIAPaCa_6_segmented.mat', 'MIAPaCa_6.pif');
+ 		save_segmentation('MIAPaCa_6_segmented.mat', [2 4 6 12 15 21 23 25 35 38 39 40 42], w_cells);
+ 		save_segmentation('MIAPaCa_6_segmented.mat', [16 19 20], wobrcbr_cells);
+ 		save_PIF('MIAPaCa_6_segmented.mat', 'MIAPaCa_6.pif');
 	end
     
 	function [nfigs] = test_2(nfigs, display)
@@ -55,9 +55,9 @@ function [] = image_segment()
 		% plot results
 		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_3', nfigs);
 		% save correct segmentations
-		save_segmentation('MIAPaCa_3_segmented.mat', [10 12 17 26], mm_fg);
-		save_segmentation('MIAPaCa_3_segmented.mat', [20 33], w_cells);
-		save_PIF('MIAPaCa_3_segmented.mat', 'MIAPaCa_3.pif');
+ 		save_segmentation('MIAPaCa_3_segmented.mat', [10 12 17 26], mm_fg);
+ 		save_segmentation('MIAPaCa_3_segmented.mat', [20 33], w_cells);
+ 		save_PIF('MIAPaCa_3_segmented.mat', 'MIAPaCa_3.pif');
 	end
 
 	function [nfigs] = test_3(nfigs, display)
@@ -79,11 +79,228 @@ function [] = image_segment()
 		% plot results
 		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_32', nfigs);
 		% save correct segmentations
-		save_segmentation('MIAPaCa_32_segmented.mat', [6 7 12 11 13 15 17 18 21], mm_fg);
-		save_segmentation('MIAPaCa_32_segmented.mat', [12 13 18 21 22 24], w_cells);
+		save_segmentation('MIAPaCa_32_segmented.mat', [4 13],[6 7 12 11 13 15 17 18 21], mm_fg);
+		save_segmentation('MIAPaCa_32_segmented.mat', [12 13 18 21 22 24], wobrcbr_cells);
 		save_PIF('MIAPaCa_32_segmented.mat', 'MIAPaCa_32.pif');
-	end
+    end
+
+function [nfigs] = test_4(nfigs, display)
+		MIAPaCa_76 = strcat('dataset',filesep,'MIAPaCa_76.tif');
+		% edge detection using mathematical morphology
+		[mm_fg, mm_outline, nfigs] = morphological_segment(MIAPaCa_76, 0.9, 8, 1000, nfigs, display);
+		% compute foreground markers
+		foreground_markers = zeros(size(mm_fg,1), size(mm_fg,2));
+		foreground_markers(mm_fg > 0) = 1;
+		sedisk = strel('disk', 4);
+		for i = 1 : 9
+			foreground_markers = imerode(foreground_markers, sedisk);
+		end
+		foreground_markers = bwareaopen(foreground_markers, 10);
+		% marker-based watershed
+		[w_cells, w_borders, nfigs] = watershed_segment(MIAPaCa_76, foreground_markers, nfigs, display);
+		% opening by reconstruction and closing by reconstruction watershed
+		[wobrcbr_cells, wobrcbr_borders, nfigs] = watershed_obrcbr_segment(MIAPaCa_76, 15, 10, 1000, nfigs, display);
+		% plot results
+		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_76', nfigs);
+		% save correct segmentations
+		save_segmentation('MIAPaCa_76_segmented.mat', [4 13], mm_fg);
+		save_segmentation('MIAPaCa_76_segmented.mat', [5 8 9 10 12 14 21 22 24], w_cells);
+		save_PIF('MIAPaCa_76_segmented.mat', 'MIAPaCa_76.pif');
+end
+
+function [nfigs] = test_5(nfigs, display)
+		MIAPaCa_77 = strcat('dataset',filesep,'MIAPaCa_77.tif');
+		% edge detection using mathematical morphology
+		[mm_fg, mm_outline, nfigs] = morphological_segment(MIAPaCa_77, 1, 8, 1000, nfigs, display);
+		% compute foreground markers
+		foreground_markers = zeros(size(mm_fg,1), size(mm_fg,2));
+		foreground_markers(mm_fg > 0) = 1;
+		sedisk = strel('disk', 4);
+		for i = 1 : 9
+			foreground_markers = imerode(foreground_markers, sedisk);
+		end
+		foreground_markers = bwareaopen(foreground_markers, 10);
+		% marker-based watershed
+		[w_cells, w_borders, nfigs] = watershed_segment(MIAPaCa_77, foreground_markers, nfigs, display);
+		% opening by reconstruction and closing by reconstruction watershed
+		[wobrcbr_cells, wobrcbr_borders, nfigs] = watershed_obrcbr_segment(MIAPaCa_77, 15, 10, 1000, nfigs, display);
+		% plot results
+		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_77', nfigs);
+		% save correct segmentations
+		save_segmentation('MIAPaCa_77_segmented.mat', [5 11], mm_fg);
+		save_segmentation('MIAPaCa_77_segmented.mat', [3 4 15 16], w_cells);
+		save_PIF('MIAPaCa_77_segmented.mat', 'MIAPaCa_77.pif');
+end
+
+function [nfigs] = test_6(nfigs, display)
+		MIAPaCa_78 = strcat('dataset',filesep,'MIAPaCa_78.tif');
+		% edge detection using mathematical morphology
+		[mm_fg, mm_outline, nfigs] = morphological_segment(MIAPaCa_78, 1, 8, 1000, nfigs, display);
+		% compute foreground markers
+		foreground_markers = zeros(size(mm_fg,1), size(mm_fg,2));
+		foreground_markers(mm_fg > 0) = 1;
+		sedisk = strel('disk', 4);
+		for i = 1 : 6
+			foreground_markers = imerode(foreground_markers, sedisk);
+		end
+		foreground_markers = bwareaopen(foreground_markers, 10);
+		% marker-based watershed
+		[w_cells, w_borders, nfigs] = watershed_segment(MIAPaCa_78, foreground_markers, nfigs, display);
+		% opening by reconstruction and closing by reconstruction watershed
+		[wobrcbr_cells, wobrcbr_borders, nfigs] = watershed_obrcbr_segment(MIAPaCa_78, 15, 10, 1000, nfigs, display);
+		% plot results
+		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_32', nfigs);
+		% save correct segmentations
+ 		save_segmentation('MIAPaCa_78_segmented.mat', [11 24 28], mm_fg);
+ 		save_segmentation('MIAPaCa_78_segmented.mat', [5 8 11 15 24], w_cells);
+ 		save_PIF('MIAPaCa_78_segmented.mat', 'MIAPaCa_78.pif');
+end
+
+function [nfigs] = test_7(nfigs, display)
+		MIAPaCa_60 = strcat('dataset',filesep,'MIAPaCa_60.tif');
+		% edge detection using mathematical morphology
+		[mm_fg, mm_outline, nfigs] = morphological_segment(MIAPaCa_60, 1, 8, 1000, nfigs, display);
+		% compute foreground markers
+		foreground_markers = zeros(size(mm_fg,1), size(mm_fg,2));
+		foreground_markers(mm_fg > 0) = 1;
+		sedisk = strel('disk', 4);
+		for i = 1 : 6
+			foreground_markers = imerode(foreground_markers, sedisk);
+		end
+		foreground_markers = bwareaopen(foreground_markers, 10);
+		% marker-based watershed
+		[w_cells, w_borders, nfigs] = watershed_segment(MIAPaCa_60, foreground_markers, nfigs, display);
+		% opening by reconstruction and closing by reconstruction watershed
+		[wobrcbr_cells, wobrcbr_borders, nfigs] = watershed_obrcbr_segment(MIAPaCa_60, 15, 10, 1000, nfigs, display);
+		% plot results
+		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_60', nfigs);
+		% save correct segmentations
+ 		save_segmentation('MIAPaCa_60_segmented.mat', [11 18 19 20 23 33 36], w_cells);
+ 		save_PIF('MIAPaCa_60_segmented.mat', 'MIAPaCa_60.pif');
+end
     
+function [nfigs] = test_8(nfigs, display)
+		MIAPaCa_61 = strcat('dataset',filesep,'MIAPaCa_61.tif');
+		% edge detection using mathematical morphology
+		[mm_fg, mm_outline, nfigs] = morphological_segment(MIAPaCa_61, 1, 8, 1000, nfigs, display);
+		% compute foreground markers
+		foreground_markers = zeros(size(mm_fg,1), size(mm_fg,2));
+		foreground_markers(mm_fg > 0) = 1;
+		sedisk = strel('disk', 4);
+		for i = 1 : 6
+			foreground_markers = imerode(foreground_markers, sedisk);
+		end
+		foreground_markers = bwareaopen(foreground_markers, 10);
+		% marker-based watershed
+		[w_cells, w_borders, nfigs] = watershed_segment(MIAPaCa_61, foreground_markers, nfigs, display);
+		% opening by reconstruction and closing by reconstruction watershed
+		[wobrcbr_cells, wobrcbr_borders, nfigs] = watershed_obrcbr_segment(MIAPaCa_61, 15, 20, 1000, nfigs, display);
+		% plot results
+		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_61', nfigs);
+		% save correct segmentations
+ 		save_segmentation('MIAPaCa_61_segmented.mat', [3 6 8 24 25 29], w_cells);
+ 		save_PIF('MIAPaCa_61_segmented.mat', 'MIAPaCa_61.pif');
+end
+
+function [nfigs] = test_9(nfigs, display)
+		MIAPaCa_50 = strcat('dataset',filesep,'MIAPaCa_50.tif');
+		% edge detection using mathematical morphology
+		[mm_fg, mm_outline, nfigs] = morphological_segment(MIAPaCa_50, 1, 8, 1000, nfigs, display);
+		% compute foreground markers
+		foreground_markers = zeros(size(mm_fg,1), size(mm_fg,2));
+		foreground_markers(mm_fg > 0) = 1;
+		sedisk = strel('disk', 4);
+		for i = 1 : 9
+			foreground_markers = imerode(foreground_markers, sedisk);
+		end
+		foreground_markers = bwareaopen(foreground_markers, 10);
+		% marker-based watershed
+		[w_cells, w_borders, nfigs] = watershed_segment(MIAPaCa_50, foreground_markers, nfigs, display);
+		% opening by reconstruction and closing by reconstruction watershed
+		[wobrcbr_cells, wobrcbr_borders, nfigs] = watershed_obrcbr_segment(MIAPaCa_50, 15, 10, 1000, nfigs, display);
+		% plot results
+		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_50', nfigs);
+		% save correct segmentations
+        save_segmentation('MIAPaCa_50_segmented.mat', [6 12 19], mm_fg);
+        save_segmentation('MIAPaCa_50_segmented.mat', [2 5 8 10 18], w_cells);
+ 		save_PIF('MIAPaCa_50_segmented.mat', 'MIAPaCa_50.pif');
+        
+end
+
+function [nfigs] = test_10(nfigs, display)
+		MIAPaCa_55 = strcat('dataset',filesep,'MIAPaCa_55.tif');
+		% edge detection using mathematical morphology
+		[mm_fg, mm_outline, nfigs] = morphological_segment(MIAPaCa_55, 1, 8, 1000, nfigs, display);
+		% compute foreground markers
+		foreground_markers = zeros(size(mm_fg,1), size(mm_fg,2));
+		foreground_markers(mm_fg > 0) = 1;
+		sedisk = strel('disk', 4);
+		for i = 1 : 9
+			foreground_markers = imerode(foreground_markers, sedisk);
+		end
+		foreground_markers = bwareaopen(foreground_markers, 10);
+		% marker-based watershed
+		[w_cells, w_borders, nfigs] = watershed_segment(MIAPaCa_55, foreground_markers, nfigs, display);
+		% opening by reconstruction and closing by reconstruction watershed
+		[wobrcbr_cells, wobrcbr_borders, nfigs] = watershed_obrcbr_segment(MIAPaCa_55, 15, 10, 1000, nfigs, display);
+		% plot results
+		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_55', nfigs);
+		% save correct segmentations
+        save_segmentation('MIAPaCa_55_segmented.mat', [19 26], mm_fg);
+        save_segmentation('MIAPaCa_55_segmented.mat', [2 6 8 15 25], w_cells);
+ 		save_PIF('MIAPaCa_55_segmented.mat', 'MIAPaCa_55.pif');
+        
+end
+
+function [nfigs] = test_11(nfigs, display)
+		MIAPaCa_48 = strcat('dataset',filesep,'MIAPaCa_48.tif');
+		% edge detection using mathematical morphology
+		[mm_fg, mm_outline, nfigs] = morphological_segment(MIAPaCa_48, 1, 8, 1000, nfigs, display);
+		% compute foreground markers
+		foreground_markers = zeros(size(mm_fg,1), size(mm_fg,2));
+		foreground_markers(mm_fg > 0) = 1;
+		sedisk = strel('disk', 4);
+		for i = 1 : 6
+			foreground_markers = imerode(foreground_markers, sedisk);
+		end
+		foreground_markers = bwareaopen(foreground_markers, 10);
+		% marker-based watershed
+		[w_cells, w_borders, nfigs] = watershed_segment(MIAPaCa_48, foreground_markers, nfigs, display);
+		% opening by reconstruction and closing by reconstruction watershed
+		[wobrcbr_cells, wobrcbr_borders, nfigs] = watershed_obrcbr_segment(MIAPaCa_48, 15, 10, 1000, nfigs, display);
+		% plot results
+		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_48', nfigs);
+		% save correct segmentations
+        save_segmentation('MIAPaCa_48_segmented.mat', [12 13], mm_fg);
+        save_segmentation('MIAPaCa_48_segmented.mat', [4 5 12 14 21 22 23 30], w_cells);
+ 		save_PIF('MIAPaCa_48_segmented.mat', 'MIAPaCa_48.pif');
+        
+end
+
+function [nfigs] = test_12(nfigs, display)
+		MIAPaCa_44 = strcat('dataset',filesep,'MIAPaCa_44.tif');
+		% edge detection using mathematical morphology
+		[mm_fg, mm_outline, nfigs] = morphological_segment(MIAPaCa_44, 1, 8, 1000, nfigs, display);
+		% compute foreground markers
+		foreground_markers = zeros(size(mm_fg,1), size(mm_fg,2));
+		foreground_markers(mm_fg > 0) = 1;
+		sedisk = strel('disk', 4);
+		for i = 1 : 9
+			foreground_markers = imerode(foreground_markers, sedisk);
+		end
+		foreground_markers = bwareaopen(foreground_markers, 10);
+		% marker-based watershed
+		[w_cells, w_borders, nfigs] = watershed_segment(MIAPaCa_44, foreground_markers, nfigs, display);
+		% opening by reconstruction and closing by reconstruction watershed
+		[wobrcbr_cells, wobrcbr_borders, nfigs] = watershed_obrcbr_segment(MIAPaCa_44, 15, 20, 1000, nfigs, display);
+		% plot results
+		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_44', nfigs);
+		% save correct segmentations
+        save_segmentation('MIAPaCa_44_segmented.mat', [11 12 26 32], mm_fg);
+        save_segmentation('MIAPaCa_44_segmented.mat', [13 14 15 20 22], w_cells);
+ 		save_PIF('MIAPaCa_44_segmented.mat', 'MIAPaCa_44.pif');
+        
+	end
 end
 
 %% Plot results
@@ -112,7 +329,7 @@ function [fig_cnt] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr
 			if ~isempty(struct_array.Centroid) && numel(extractfield(struct_array, 'Centroid')) == 2
 				centroid = cat(1, struct_array.Centroid);
 				txt = text(centroid(1), centroid(2), int2str(i));
-				set(txt, 'fontsize', 5);
+				set(txt, 'fontsize', 10);
 			end
 		end
 	end
@@ -127,7 +344,7 @@ function [fig_cnt] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr
 			if ~isempty(struct_array.Centroid) && numel(extractfield(struct_array, 'Centroid')) == 2
 				centroid = cat(1, struct_array.Centroid);
 				txt = text(centroid(1), centroid(2), int2str(i));
-				set(txt, 'fontsize', 5);
+				set(txt, 'fontsize', 10);
 			end
 		end
 	end
@@ -142,7 +359,7 @@ function [fig_cnt] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr
 			if ~isempty(struct_array.Centroid) && numel(extractfield(struct_array, 'Centroid')) == 2
 				centroid = cat(1, struct_array.Centroid);
 				txt = text(centroid(1), centroid(2), int2str(i));
-				set(txt, 'fontsize', 5);
+				set(txt, 'fontsize', 10);
 			end
 		end
 	end
