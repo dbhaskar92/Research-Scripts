@@ -10,7 +10,7 @@ function [] = image_segment()
     
 	nfigs = 1;
 
-	test_3(nfigs, 1);
+	test_32(nfigs, 1);
 
 	function [nfigs] = test_1(nfigs, display)
 		MIAPaCa_6 = 'MIAPaCa_6.JPG';
@@ -80,7 +80,7 @@ function [] = image_segment()
 		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_32', nfigs);
 		% save correct segmentations
 		save_segmentation('MIAPaCa_32_segmented.mat', [4 6 7 12 11 13 15 17 18 21], mm_fg);
-		save_segmentation('MIAPaCa_32_segmented.mat', [12 13 18 21 22 24], wobrcbr_cells);
+		save_segmentation('MIAPaCa_32_segmented.mat', [13 18 21 22 24], wobrcbr_cells);
 		save_PIF('MIAPaCa_32_segmented.mat', 'MIAPaCa_32.pif');
     	end
 
