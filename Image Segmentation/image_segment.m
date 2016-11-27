@@ -10,7 +10,7 @@ function [] = image_segment()
     
 	nfigs = 1;
 
-	test_12(nfigs, 1);
+	test_4(nfigs, 1);
 
 	function [nfigs] = test_1(nfigs, display)
 		MIAPaCa_6 = 'MIAPaCa_6.JPG';
@@ -79,7 +79,7 @@ function [] = image_segment()
 		% plot results
 		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_32', nfigs);
 		% save correct segmentations
-		save_segmentation('MIAPaCa_32_segmented.mat', [4 13],[6 7 12 11 13 15 17 18 21], mm_fg);
+		save_segmentation('MIAPaCa_32_segmented.mat', [6 7 12 11 13 15 17 18 21], mm_fg);
 		save_segmentation('MIAPaCa_32_segmented.mat', [12 13 18 21 22 24], wobrcbr_cells);
 		save_PIF('MIAPaCa_32_segmented.mat', 'MIAPaCa_32.pif');
     end
@@ -103,9 +103,9 @@ function [nfigs] = test_4(nfigs, display)
 		% plot results
 		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_76', nfigs);
 		% save correct segmentations
-		save_segmentation('MIAPaCa_76_segmented.mat', [4 13], mm_fg);
-		save_segmentation('MIAPaCa_76_segmented.mat', [5 8 9 10 12 14 21 22 24], w_cells);
-		save_PIF('MIAPaCa_76_segmented.mat', 'MIAPaCa_76.pif');
+		%save_segmentation('MIAPaCa_76_segmented.mat', [4 13], mm_fg);
+		%save_segmentation('MIAPaCa_76_segmented.mat', [5 8 9 10 12 14 21 22 24], w_cells);
+		%save_PIF('MIAPaCa_76_segmented.mat', 'MIAPaCa_76.pif');
 end
 
 function [nfigs] = test_5(nfigs, display)
@@ -151,9 +151,9 @@ function [nfigs] = test_6(nfigs, display)
 		% plot results
 		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_32', nfigs);
 		% save correct segmentations
- 		save_segmentation('MIAPaCa_78_segmented.mat', [11 24 28], mm_fg);
- 		save_segmentation('MIAPaCa_78_segmented.mat', [5 8 11 15 24], w_cells);
- 		save_PIF('MIAPaCa_78_segmented.mat', 'MIAPaCa_78.pif');
+ 		%save_segmentation('MIAPaCa_78_segmented.mat', [11 24 28], mm_fg);
+ 		%save_segmentation('MIAPaCa_78_segmented.mat', [5 8 11], w_cells);
+ 		%save_PIF('MIAPaCa_78_segmented.mat', 'MIAPaCa_78.pif');
 end
 
 function [nfigs] = test_7(nfigs, display)
