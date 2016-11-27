@@ -10,7 +10,7 @@ function [] = image_segment()
     
 	nfigs = 1;
 
-	test_1(nfigs, 1);
+	test_3(nfigs, 1);
 
 	function [nfigs] = test_1(nfigs, display)
 		MIAPaCa_6 = 'MIAPaCa_6.JPG';
@@ -36,7 +36,7 @@ function [] = image_segment()
  		save_PIF('MIAPaCa_6_segmented.mat', 'MIAPaCa_6.pif');
 	end
     
-	function [nfigs] = test_2(nfigs, display)
+	function [nfigs] = test_3(nfigs, display)
 		MIAPaCa_3 = 'MIAPaCa_3.tif';
 		% edge detection using mathematical morphology
 		[mm_fg, mm_outline, nfigs] = morphological_segment(MIAPaCa_3, 1, 6, 1000, nfigs, display);
@@ -149,10 +149,10 @@ function [] = image_segment()
 		% opening by reconstruction and closing by reconstruction watershed
 		[wobrcbr_cells, wobrcbr_borders, nfigs] = watershed_obrcbr_segment(MIAPaCa_78, 15, 10, 1000, nfigs, display);
 		% plot results
-		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_32', nfigs);
+		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_78', nfigs);
 		% save correct segmentations
- 		save_segmentation('MIAPaCa_78_segmented.mat', [11 24 28], mm_fg);
- 		save_segmentation('MIAPaCa_78_segmented.mat', [5 8 11 15 24], w_cells);
+ 		save_segmentation('MIAPaCa_78_segmented.mat', [8 11 17 24 28], mm_fg);
+ 		save_segmentation('MIAPaCa_78_segmented.mat', [5 11 23], w_cells);
  		save_PIF('MIAPaCa_78_segmented.mat', 'MIAPaCa_78.pif');
 	end
 
@@ -246,7 +246,7 @@ function [] = image_segment()
 		[nfigs] = plot_results(mm_fg, mm_outline, w_cells, w_borders, wobrcbr_cells, wobrcbr_borders, 'MIAPaCa_55', nfigs);
 		% save correct segmentations
         	save_segmentation('MIAPaCa_55_segmented.mat', [19 26], mm_fg);
-        	save_segmentation('MIAPaCa_55_segmented.mat', [2 6 8 15 25], w_cells);
+        	save_segmentation('MIAPaCa_55_segmented.mat', [2 6 8 10 15 25], w_cells);
  		save_PIF('MIAPaCa_55_segmented.mat', 'MIAPaCa_55.pif'); 
 	end
 	
