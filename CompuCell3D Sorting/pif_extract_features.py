@@ -137,7 +137,7 @@ if separate:
 		or not os.path.isdir(splineBdyOut)):
 		print("Error: One of the output folders do not exist.\n")
 		sys.exit(1)
-		
+
 else:
 	circleOut = ellipseOut = splineOut = polyOut = boundaryOut = vectorizeOut = outFolder
 
@@ -158,15 +158,15 @@ for pix in lattice:
 	c_type = str(fields[1])
 	pix_x = int(fields[3])
 	pix_y = int(fields[5])
-            
+
 	if cell_id not in cellDict.keys():
-    
+
 		cellDict[cell_id] = [[pix_x, pix_y]]
 
 	cellDict[cell_id].append([pix_x, pix_y])
 	cellTypeDict[cell_id] = c_type
 	lattice_data[pix_x, pix_y] = cell_id
-	
+
 	if c_type == 'CellU':
 		lattice_matrix[pix_x, pix_y] = 0x8000EE00	# alpha, blue, green, red
 	if c_type == 'CellV':
@@ -185,7 +185,7 @@ def contains_isolated_cells():
 	'''
 
 	global lattice_data
-	
+
 	clipped_lattice_data = NP.clip(lattice_data,0,1)
 
 	[labeled_img, num_labels] = NDI.measurements.label(clipped_lattice_data)
@@ -197,7 +197,7 @@ def contains_isolated_cells():
 
 # Conversion functions
 def conv_distance(x):
-	conv_factor = 0.8
+	conv_factor = 0.4
 	units = 'um'
 	return x*conv_factor, units
 
@@ -207,7 +207,7 @@ def conv_time(x):
 	return x*conv_factor, units
 
 def conv_area(x):
-	conv_factor = 0.64
+	conv_factor = 0.16
 	units = 'um^2'
 	return x*conv_factor, units
 
@@ -249,7 +249,7 @@ def TestSingleCellPlot(extractor):
 
 	PLT.imshow(fixed_perim, interpolation='nearest', cmap='Greys')
 	PLT.plot(extractor.perim_coord_poly[:,0], extractor.perim_coord_poly[:,1], label='Poly', linewidth=3, color='g')
-	
+
 	ax.add_artist(c)
 	c.set_alpha(1)
 	c.set_facecolor('none')
@@ -271,7 +271,7 @@ def TestSingleCellPlot(extractor):
 
 	ax.set_xlim([xlim_min, xlim_max])
 	ax.set_ylim([ylim_min, ylim_max])
-	PLT.savefig(pifFileName + '_Fits.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
+	PLT.savefig(outFolder+pifFileName + '_Fits.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
 
 	# Create spline plot with boundary color based on magnitude and parity of curvature
 	fig = PLT.figure(2)
@@ -280,14 +280,14 @@ def TestSingleCellPlot(extractor):
 	pcolor = PLT.cm.bwr(knorm)
 
 	PLT.imshow(fixed_perim, interpolation='nearest', cmap='Greys')
-	
+
 	for i in range(len(U)):
 		PLT.plot(OUT[0][i:i+2],OUT[1][i:i+2],color=pcolor[i],linewidth=3)
 
 	ax.set_xlim([xlim_min, xlim_max])
 	ax.set_ylim([ylim_min, ylim_max])
 
-	PLT.savefig(pifFileName + '_SplineCurvature.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
+	PLT.savefig(outFolder+pifFileName + '_SplineCurvature.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
 
 	# Create spline plot with a binary boundary color scheme based on parity of curvature
 	fig = PLT.figure(3)
@@ -296,7 +296,7 @@ def TestSingleCellPlot(extractor):
 	pcolor = PLT.cm.bwr(knorm)
 
 	PLT.imshow(fixed_perim, interpolation='nearest', cmap='Greys')
-	
+
 	for i in range(len(U)):
 		PLT.plot(OUT[0][i:i+2],OUT[1][i:i+2],color=pcolor[i],linewidth=3)
 
@@ -308,9 +308,9 @@ def TestSingleCellPlot(extractor):
 
 	lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=2, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
 
-	PLT.savefig(pifFileName + '_SplineCurvatureBin.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
+	PLT.savefig(outFolder+pifFileName + '_SplineCurvatureBin.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
 
-		
+
 ## COMPUTE FEATURES FOR ALL CELLS #############################################
 
 featureDict = dict()
@@ -340,17 +340,17 @@ for cell_id in cellDict.keys():
 			thread_list.append(threading.Thread(target=extractor.basic_props(splineSmooth), args=(), kwargs={}))
 			thread_list.append(threading.Thread(target=extractor.shape_props(), args=(), kwargs={}))
 			thread_list.append(threading.Thread(target=extractor.cell_centre_fit(), args=(), kwargs={}))
-		
+
 			for thread in thread_list:
 				thread.start()
-		
+
 			for thread in thread_list:
 				thread.join()
 		else:
 			extractor.basic_props(splineSmooth)
 			extractor.shape_props()
 			extractor.cell_centre_fit()
-	
+
 		featureDict[cell_id] = [extractor.area_cell, extractor.perim_1sqrt2, extractor.equiv_diameter]
 		featureDict[cell_id] = featureDict[cell_id] +  [extractor.perim_3pv]
 		featureDict[cell_id] = featureDict[cell_id] + [extractor.perim_poly, extractor.area_poly]
@@ -379,7 +379,7 @@ ELLIPSE_numfeat = 9
 CCM_numfeat = 6
 ERODED_numfeat = 2
 BDY_numfeat = 6
-SHAPE_numfeat = 7
+SHAPE_numfeat = 9
 
 TPV_start = BASIC_numfeat
 POLY_start = TPV_start + TPV_numfeat
@@ -393,16 +393,16 @@ featIndexDict['BASIC'] = dict(
 	area = 0,
 	perimeter =1,
 	equiv_diameter=2)
-	
+
 featIndexDict['TPV'] = dict(
 	perimeter=TPV_start)
-	
+
 featIndexDict['POLY'] = dict(
 	perimeter=POLY_start,
 	area=POLY_start+1)
-	
+
 featIndexDict['ELLIPSE'] = dict(
-	centroid_x=ELLIPSE_start, 
+	centroid_x=ELLIPSE_start,
 	centroid_y=ELLIPSE_start+1,
 	eccentricity=ELLIPSE_start+2,
 	major_axis_length=ELLIPSE_start+3,
@@ -411,7 +411,7 @@ featIndexDict['ELLIPSE'] = dict(
 	area=ELLIPSE_start+6,
 	perimeter=ELLIPSE_start+7,
 	variance=ELLIPSE_start+8)
-	
+
 featIndexDict['CCM'] = dict(
 	centroid_x=CCM_start,
 	centroid_y=CCM_start+1,
@@ -419,7 +419,7 @@ featIndexDict['CCM'] = dict(
 	perimeter=CCM_start+3,
 	area=CCM_start+4,
 	variance=CCM_start+5)
-	
+
 featIndexDict['ERODED'] = dict(
 	perimeter=ERODED_start,
 	area=ERODED_start+1)
@@ -439,7 +439,9 @@ featIndexDict['SHAPE'] = dict(
 	compactness=SHAPE_start+3,
 	elongation=SHAPE_start+4,
 	convexity=SHAPE_start+5,
-	circularity=SHAPE_start+6)
+	circularity=SHAPE_start+6,
+	extension=SHAPE_start+7,
+	dispersion=SHAPE_start+8)
 
 ## PRODUCE LATTICE PLOTS WITH FITS ############################################
 
@@ -452,7 +454,7 @@ if plotfits:
 	pilImage = pilImage.convert('RGB')
 
 	pilImage.save(boundaryOut + pifFileName + '_Boundary.png')
-	
+
 	# Plot polygonized lattice
 	sp = None
 	if not contains_isolated_cells():
@@ -473,7 +475,7 @@ if plotfits:
 		height = featureDict[cell_id][featIndexDict['ELLIPSE']['major_axis_length']],
 		angle = featureDict[cell_id][featIndexDict['ELLIPSE']['orientation']]/(2*NP.pi)*360),
 		cellTypeDict[cell_id]] for cell_id in cellDict.keys()]
-	
+
 	for el in ells:
 		e = el[0]
 		ctype = el[1]
@@ -487,7 +489,7 @@ if plotfits:
 			e.set_facecolor([1,0,0])
 		else:
 			e.set_facecolor([0,0,1])
-	
+
 	if plotZoom != -1:
 		ax.set_xlim([plotZoom,l_width-plotZoom])
 		ax.set_ylim([plotZoom,l_height-plotZoom])
@@ -495,7 +497,7 @@ if plotfits:
 		ax.set_xlim([0,l_width])
 		ax.set_ylim([0,l_height])
 	PLT.savefig(ellipseOut + pifFileName + '_EllipseFit.png', bbox_inches='tight', dpi = imgDPI)
-	
+
 	# Plot cell-centre model (disk fit)
 	numFigs += 1
 	fig = PLT.figure(numFigs)
@@ -554,7 +556,7 @@ if plotfits:
 		ax.set_xlim([0,l_width])
 		ax.set_ylim([0,l_height])
 	PLT.savefig(polyOut + pifFileName + '_PolyFit.png', bbox_inches='tight', dpi = imgDPI)
-	
+
 	# Plot spline model
 	numFigs += 1
 	fig = PLT.figure(numFigs)
@@ -622,7 +624,7 @@ if plotfits:
 			ax.set_xlim([0,l_width])
 			ax.set_ylim([0,l_height])
 		PLT.savefig(splineBdyOut + pifFileName + '_SplineBdyFit.png', bbox_inches='tight', dpi = imgDPI)
-	
+
 	if sp is not None:
 		sp.wait()
 
@@ -716,13 +718,13 @@ if comparefits:
 	PLT.xlabel('Cell (arbitrary)')
 	PLT.ylabel('Perimeter (' + perim_unit + ')')
 	PLT.title('Comparison of Perimeter vs. Cell')
-	lgd = PLT.legend(["Ellipse fit", "CCM fit", "Poly fit", "Eroded Poly", "1, sqrt(2) method", "3pv method"], 
+	lgd = PLT.legend(["Ellipse fit", "CCM fit", "Poly fit", "Eroded Poly", "1, sqrt(2) method", "3pv method"],
 	bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=3, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
-	
+
 	if plotXML:
 		lgd = PLT.legend(["xml", "Ellipse fit", "CCM fit", "Poly fit", "Eroded Poly", "1, sqrt(2) method", "3pv method"],
 		bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=3, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
-	
+
 	PLT.savefig(outFolder + pifFileName + '_PerimCompare.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = imgDPI)
 
 	numFigs += 1
@@ -740,11 +742,11 @@ if comparefits:
 	PLT.title('Comparison of Area vs. Cell')
 	lgd = PLT.legend([ "Ellipse fit", "CCM fit", "Poly fit", "Eroded Poly", "Pixel counting"],
 	bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=3, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
-	
+
 	if plotXML:
 		PLT.legend([ "xml", "Ellipse fit", "CCM fit", "Poly fit", "Eroded Poly", "Pixel counting"],
 		bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=3, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
-				
+
 	PLT.savefig(outFolder + pifFileName + '_AreaCompare.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = imgDPI)
 
  ## CREATE CSV FILE ###########################################################
@@ -762,7 +764,7 @@ if createcsv:
 		# cellLoc
 		cellLoc = []
 		cellLoc.append(cell_id)
-		cellLoc.append(featureDict[cell_id][featIndexDict['ELLIPSE']['centroid_x']]) 
+		cellLoc.append(featureDict[cell_id][featIndexDict['ELLIPSE']['centroid_x']])
 		cellLoc.append(featureDict[cell_id][featIndexDict['ELLIPSE']['centroid_y']])
 		cellLoc.append(featureDict[cell_id][featIndexDict['CCM']['centroid_x']])
 		cellLoc.append(featureDict[cell_id][featIndexDict['CCM']['centroid_y']])
@@ -777,12 +779,15 @@ if createcsv:
 		cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['elongation']])
 		cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['convexity']])
 		cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['circularity']])
+		cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['extension']])
+		cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['dispersion']])
 		nondimList.append(list(cellNondim))
 
 		# Create feature vector for the cell, but remove centroids as they are in the location list
 		# Also remove nondimensional shape factors
 		cellFeat = list(featureDict[cell_id])
-
+		cellFeat.pop(featIndexDict['SHAPE']['dispersion'])
+		cellFeat.pop(featIndexDict['SHAPE']['extension'])
 		cellFeat.pop(featIndexDict['SHAPE']['circularity'])
 		cellFeat.pop(featIndexDict['SHAPE']['convexity'])
 		cellFeat.pop(featIndexDict['SHAPE']['elongation'])
@@ -790,6 +795,8 @@ if createcsv:
 		cellFeat.pop(featIndexDict['SHAPE']['solidity'])
 		cellFeat.pop(featIndexDict['SHAPE']['euler_number'])
 		cellFeat.pop(featIndexDict['SHAPE']['extent'])
+		
+		
 
 		cellFeat.pop(featIndexDict['CCM']['centroid_y'])
 		cellFeat.pop(featIndexDict['CCM']['centroid_x'])
@@ -802,7 +809,7 @@ if createcsv:
 	locationNames = ['Cell_ID', 'ELLIPSE_centroid_x', 'ELLIPSE_centroid_y', 'CCM_centroid_x', 'CCM_centroid_y']
 
 	# Create nondimensional factors name list
-	nondimNames = ['SHAPE_extent', 'SHAPE_euler_number', 'SHAPE_solidity', 'SHAPE_compactness', 'SHAPE_elongation', 'SHAPE_convexity', 'SHAPE_circularity']
+	nondimNames = ['SHAPE_extent', 'SHAPE_euler_number', 'SHAPE_solidity', 'SHAPE_compactness', 'SHAPE_elongation', 'SHAPE_convexity', 'SHAPE_circularity', 'SHAPE_extension', 'SHAPE_dispersion']
 
 	# Create feature name list
 	featNamesOrig = []
@@ -856,26 +863,26 @@ if createcsv:
 	outFile = pifFileName + '.csv'
 
 	with open(outFile, 'wb') as csvfile:
-	    featWriter = csv.writer(csvfile)
+		featWriter = csv.writer(csvfile)
 
-	    # Write the comments
-	    ts = time.time()
-	    timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
-	    
-	    featWriter.writerow(['# Simulation Data Feature List'])
-	    featWriter.writerow(['# Date Created: ' + timestamp])
-	    featWriter.writerow(['# Original PIF file: ' + pifFile])
+		# Write the comments
+		ts = time.time()
+		timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
 
-	    featWriter.writerow(['# Identifier (Cell ID) Column: 0'])
-	    featWriter.writerow(['# Location (Ellipse Centroid) Columns: 1-2'])
-	    featWriter.writerow(['# Location (Circle Centroid) Columns: 3-4'])
-	    featWriter.writerow(['# Nondimensional (Shape Factor) Columns: 5-11'])
-	    featWriter.writerow(['# Standardized Feature Columns: 12-' + str(11+numFeat)])
-	    featWriter.writerow(['# Original Feature Columns: ' + str(12+numFeat) + '-' + str(11+2*numFeat)])
-	    featWriter.writerow(['# Number of Cells: ' + str(numCells)])
+		featWriter.writerow(['# Simulation Data Feature List'])
+		featWriter.writerow(['# Date Created: ' + timestamp])
+		featWriter.writerow(['# Original PIF file: ' + pifFile])
 
-	    featWriter.writerow([])
-	    featWriter.writerow(featNamesOrig)
+		featWriter.writerow(['# Identifier (Cell ID) Column: 0'])
+		featWriter.writerow(['# Location (Ellipse Centroid) Columns: 1-2'])
+		featWriter.writerow(['# Location (Circle Centroid) Columns: 3-4'])
+		featWriter.writerow(['# Nondimensional (Shape Factor) Columns: 5-11'])
+		featWriter.writerow(['# Standardized Feature Columns: 12-' + str(11+numFeat)])
+		featWriter.writerow(['# Original Feature Columns: ' + str(12+numFeat) + '-' + str(11+2*numFeat)])
+		featWriter.writerow(['# Number of Cells: ' + str(numCells)])
 
-	    for row in featList:
-	    	featWriter.writerow(row)
+		featWriter.writerow([])
+		featWriter.writerow(featNamesOrig)
+
+		for row in featList:
+			featWriter.writerow(row)
