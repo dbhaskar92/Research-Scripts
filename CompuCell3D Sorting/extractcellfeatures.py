@@ -19,7 +19,7 @@ from scipy.signal import argrelextrema
 class ExtractFeatures:
 
 	def __init__(self, cell_pixel_list):
-	
+
 		self.pix_list = cell_pixel_list
 
 		self.cell_img = None # Binary image of full cell
@@ -57,16 +57,16 @@ class ExtractFeatures:
 		# Check how many connected components there are
 		s = [[1,1,1],[1,1,1],[1,1,1]] # Used to allow diagonal connections
 		_, self.connectedComp = NDI.measurements.label(self.cell_img,structure=s)
-		
+
 	def cell_to_image(self):
-	
+
 		# Find x, y coordinate bounds
 		x_res = max(self.pix_list, key=itemgetter(0))[0]
 		y_res = max(self.pix_list, key=itemgetter(1))[1]
 
 		# Creating labeled_img
 		self.cell_img = NP.zeros([x_res+2, y_res+2], dtype=NP.int_)
-		
+
 		for (x_pix, y_pix) in self.pix_list:
 			self.cell_img[x_pix-1, y_pix-1] = 1
 
@@ -86,10 +86,10 @@ class ExtractFeatures:
 		self.perim_coord = NP.transpose(perim_image_coord)
 
 		return
-		
+
 
 	def basic_props(self, splineSmooth=10):
-	
+
 		'''
 		Description: Calculates the perimeter and area using basic methods. For perimeter,
 		we use the 3pv, 1 sqrt2 method, and look at the 3pv-polygon perimeter. For area,
@@ -101,7 +101,7 @@ class ExtractFeatures:
 		For cubic spline: Use the built-in function from scipy. Note about smoothing parameter in reference.
 		Reference: http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.interpolate.splprep.html
 		'''
-		
+
 		# Perimeter: 3pv and polygon perimeter (polygon from 3pv)
 		self.perim_3pv, self.perim_poly, self.perim_coord_poly = perimeter_3pvm.perimeter_3pvm(self.perim_img)
 		_, self.perim_eroded, self.perim_coord_eroded = perimeter_3pvm.perimeter_3pvm(self.eroded_img)
@@ -152,7 +152,7 @@ class ExtractFeatures:
 		self.perim_1sqrt2 = props[0].perimeter
 
 		# Area: Pixel Counting
-		self.area_cell = len(self.pix_list)	
+		self.area_cell = len(self.pix_list)
 
 		# Area: Polygon area (from 3pv polygon)
 		# Extract x and y coordinates
@@ -171,12 +171,12 @@ class ExtractFeatures:
 
 		# Equivalent Diameter: The diameter of the circle with the same area (pixel counted) as the cell
 		self.equiv_diameter = NP.sqrt(4*self.area_cell/NP.pi)
-		
+
 		return
-		
+
 
 	def shape_props(self):
-	
+
 		'''
 		Description: Returns list of properties derived from fitting ellipse (in the following order)
 		centroid_x, centroid_y, eccentricity, majorAxisLength, minorAxisLength, orientation,
@@ -196,7 +196,7 @@ class ExtractFeatures:
 		Reference: https://en.wikipedia.org/wiki/Image_moment
 
 		Ellipse perimeter: Equation given in https://en.wikipedia.org/wiki/Ellipse#Circumference
-		The elliptic integral of the second kind implemented in scipy: 
+		The elliptic integral of the second kind implemented in scipy:
 		http://docs.scipy.org/doc/scipy/reference/generated/scipy.special.ellipe.html#scipy.special.ellipe
 		Note that the scipy definition of the integral differs slightly than wiki, so we take E(e^2) rather than E(e).
 		'''
@@ -213,7 +213,7 @@ class ExtractFeatures:
 		cV = NP.array(NP.linalg.inv(cov)*NP.mat(V))
 		d = NP.sqrt(V[0]*cV[0] + V[1]*cV[1])
 		mu = NP.sum(d)/numPt
-		sigma = NP.sqrt(NP.sum((d-mu)**2)/numPt)	
+		sigma = NP.sqrt(NP.sum((d-mu)**2)/numPt)
 
 		ellipse_prop_list = [centroid[0]]
 		ellipse_prop_list.append(centroid[1])
@@ -222,7 +222,7 @@ class ExtractFeatures:
 		ellipse_prop_list.append(props[0].minor_axis_length)
 		ellipse_prop_list.append(props[0].orientation) # In degrees starting from the x-axis
 		ellipse_prop_list.append(NP.pi*ellipse_prop_list[4]*ellipse_prop_list[5]/4.0) # Ellipse area
-		ellipse_prop_list.append(2.0*ellipse_prop_list[4]*scipy.special.ellipe(ellipse_prop_list[5]**2)) # Ellipse perimeter
+		ellipse_prop_list.append(2.0*ellipse_prop_list[4]*scipy.special.ellipe(props[0].eccentricity**2)) # Ellipse perimeter, parameter to special.ellipe should be eccentricity**2
 		ellipse_prop_list.append(sigma/mu) # Ellipse variance
 
 		self.ellipse_fvector = ellipse_prop_list
@@ -240,14 +240,16 @@ class ExtractFeatures:
 		cvx_perim_img = cvx_img - eroded_cvx_img
 		cvx_perim_img = NP.lib.pad(cvx_perim_img,(1,1),'constant') # Pad with 0's for perimeter code to work properly
 		_, cvx_perim, _ = perimeter_3pvm.perimeter_3pvm(cvx_perim_img)
-		
-	
+
+
 		# Calculate shape factors
 		# compactness = area**2/(NP.pi*2*NP.sqrt(inertia_ev[0]**2 + inertia_ev[1]**2))
-		compactness = -1 # NOTE: THIS IS SIMPLY A PLACEHOLDER AS THE COMPACTNESS IS CURRENTLY INCORRECT AS IMPLEMENTED
-		elongation = NP.sqrt(inertia_ev[1]/inertia_ev[0])
+		compactness = NP.sqrt((4*area)/NP.pi)/(props[0].major_axis_length) # sqrt(4(area)/pi)/(MaximumDiameter of Ellipse Fit)
+		elongation = 1-(props[0].minor_axis_length/props[0].major_axis_length)
 		convexity = cvx_perim/perim
 		circularity = 4*NP.pi*area/(perim**2)
+		extension = area/(NP.pi*ellipse_prop_list[4]*ellipse_prop_list[5]/4.0) #Extension = Area of cell/area of ellipse fit?
+		dispersion = 0 #set to 0 for now
 
 		# Create shape feature vector
 		self.shape_fvector = []
@@ -258,12 +260,14 @@ class ExtractFeatures:
 		self.shape_fvector.append(elongation) # Square root of ratio of two second moments (smaller over larger) (from 0 to 1)
 		self.shape_fvector.append(convexity) # Ratio of convex hull perimeter to perimeter (from 0 to 1)
 		self.shape_fvector.append(circularity) # Ratio of area to perimeter squared (circle = 1, starfish << 1)
+		self.shape_fvector.append(extension)
+		self.shape_fvector.append(dispersion)
 
 		return
-		
-		
+
+
 	def cell_centre_fit(self):
-	
+
 		'''
 		Description: Returns a list of features derived from fitting a circle (in the following order):
 		centroid_x, centroid_y, radius, perimeter, area.
@@ -272,14 +276,14 @@ class ExtractFeatures:
 		These points are chosen to be at the center of the boundary pixels.
 
 		Circle variance is a goodness of fit measure for the circle fit and is defined in this reference:
-		http://www.math.uci.edu/icamp/summer/research_11/park/shape_descriptors_survey.pdf 
+		http://www.math.uci.edu/icamp/summer/research_11/park/shape_descriptors_survey.pdf
 		'''
 
 		c_model = skimage.measure.CircleModel()
 		c_model.estimate(self.perim_coord)
 
 		if skimage.__version__ == '0.9.3':
-			(xc, yc, r) = c_model._params	
+			(xc, yc, r) = c_model._params
 		else:									# For newer versions
 			(xc, yc, r) = c_model.params
 
@@ -296,6 +300,6 @@ class ExtractFeatures:
 		cell_centre_features.append(2*NP.pi*r)
 		cell_centre_features.append(NP.pi*r**2)
 		cell_centre_features.append(sigma/mu) # Circle variance (lower is better)
-	
+
 		self.ccm_fvector = cell_centre_features
 		return
