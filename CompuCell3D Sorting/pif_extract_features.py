@@ -196,17 +196,17 @@ def contains_isolated_cells():
 		return False
 
 # Conversion functions
-def conv_distance(x):
+def conv_distance(x):#MIA PaCa Phase Contrast Microscopy
 	conv_factor = 0.4
 	units = 'um'
 	return x*conv_factor, units
 
-def conv_time(x):
+def conv_time(x):#MIA PaCa Phase Contrast Microscopy
 	conv_factor = 0.2
 	units = 'min'
 	return x*conv_factor, units
 
-def conv_area(x):
+def conv_area(x):#MIA PaCa Phase Contrast Microscopy
 	conv_factor = 0.16
 	units = 'um^2'
 	return x*conv_factor, units
