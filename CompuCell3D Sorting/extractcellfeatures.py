@@ -242,56 +242,66 @@ class ExtractFeatures:
 
         # Calculate minimum bounding rectangle
         #angle = props[0].orientation
-        boundary_points = self.perim_coord
+        boundary_points = self.perim_coord #list of boundary points
+        # compute centroid
         x_bar = centroid[0]
         y_bar = centroid[1]
+        # size of boundary points list
         X, Y = boundary_points.shape
+        # compute angle using the formula tan(2*angle) = 2*(sum((xi-xbar)*(yi-ybar))/((xi-xbar)^2-(yi-ybar)^2))
         top_sum = 0
         bot_sum = 0
         for i in range(X):
             x = boundary_points[i][0]
             y = boundary_points[i][1]
-            top_sum += (x-x_bar)*(y-y_bar)
-            bot_sum += ((x-x_bar)**2-(y-y_bar)**2)
+            top_sum += (x-x_bar)*(y-y_bar) # sum((xi-xbar)*(yi-ybar)
+            bot_sum += ((x-x_bar)**2-(y-y_bar)**2) # (xi-xbar)^2-(yi-ybar)^2)
         angle = (NP.arctan((2*top_sum)/bot_sum))/2
+        # angle = props[0].orientation
 
-        major_upper = []
+        major_upper = [] # list of boundary points upper of major axes
         major_lower = []
         minor_upper = []
         minor_lower = []
+        # initialize max/min distances to the axes
         major_max = 0
-        major_min = 1000
+        major_min = 0
         minor_max = 0
-        minor_min = 100
+        minor_min = 0
+        # initialize furthest point to the axes
+        major_up_point = (0,0) # point on top of major axes that is the furthest away
+        major_low_point = (0,0) # point below major axes that is the furthest away
+        minor_up_point = (0,0) # point to the right of minor axes that is the furthest away
+        minor_low_point = (0,0) # point to the left of minor axes that is the furthest away
+        # classify each boundary point, calculate distance, and record max distances seen so far
         for i in range(X):
             x = boundary_points[i][0]
             y = boundary_points[i][1]
-            V_major = (y-y_bar)-NP.tan(angle*(x-x_bar))
-            V_minor = (y-y_bar)-self.cot(angle*(x-x_bar))
+            V_major = (y-y_bar)-NP.tan(angle)*(x-x_bar)
+            V_minor = (y-y_bar)+self.cot(angle)*(x-x_bar)
+            dist_major = ((x-x_bar)*NP.sin(angle)-(y-y_bar)*NP.cos(angle))**2
+            dist_minor = ((x-x_bar)*NP.cos(angle)+(y-y_bar)*NP.sin(angle))**2
             if (V_major > 0):
                 major_upper.append(boundary_points[i])
-                if (V_major > major_max):
-                    major_max = V_major
+                if (dist_major > major_max):
+                    major_max = dist_major
                     major_up_point = boundary_points[i]
             elif (V_major < 0):
                 major_lower.append(boundary_points[i])
-                if (V_major < major_min):
-                    major_min = V_minor
+                if (dist_major > major_min):
+                    major_min = dist_major
                     major_low_point = boundary_points[i]
             if (V_minor > 0):
                 minor_upper.append(boundary_points[i])
-                if (V_minor > minor_max):
-                    minor_max = V_major
+                if (dist_minor > minor_max):
+                    minor_max = dist_minor
                     minor_up_point = boundary_points[i]
             elif (V_minor < 0):
                 minor_lower.append(boundary_points[i])
-                if (V_minor < minor_min):
-                    minor_min = V_minor
+                if (dist_minor > minor_min):
+                    minor_min = dist_minor
                     minor_low_point = boundary_points[i]
-        # print major_up_point
-        # print major_low_point
-        # print minor_up_point
-        # print minor_low_point
+        # calculate vertices of the rectangle based on points classified
         t_lx = (major_up_point[0]*NP.tan(angle)+minor_up_point[0]*self.cot(angle)+minor_up_point[1]-major_up_point[1])/(NP.tan(angle)+self.cot(angle))
         t_ly = (major_up_point[1]*self.cot(angle)+minor_up_point[1]*NP.tan(angle)+minor_up_point[0]-major_up_point[0])/(NP.tan(angle)+self.cot(angle))
 
@@ -303,23 +313,22 @@ class ExtractFeatures:
 
         b_rx = (major_low_point[0]*NP.tan(angle)+minor_low_point[0]*self.cot(angle)+minor_low_point[1]-major_low_point[1])/(NP.tan(angle)+self.cot(angle))
         b_ry = (major_low_point[1]*self.cot(angle)+minor_low_point[1]*NP.tan(angle)+minor_low_point[0]-major_low_point[0])/(NP.tan(angle)+self.cot(angle))
-
+        # make the vertices into tuples
         top_left = (t_lx,t_ly)
         top_right = (t_rx, t_ry)
         bot_left = (b_lx,b_ly)
         bot_right = (b_rx,b_ry)
+        print major_up_point
+        print major_low_point
+        print minor_up_point
+        print minor_low_point
         print top_left
         print top_right
         print bot_left
         print bot_right
+        # return the list of vertices, top_left twice so that plt could join the sides of the rectangle
         self.ret_fvector=[top_left,top_right,bot_right,bot_left,top_left]
-
-
-
-
-
-
-
+        #self.ret_fvector=[major_up_point,major_low_point,minor_up_point,minor_low_point,major_up_point]
 
         # Calculate convex hull perimeter
         cvx_img = props[0].convex_image # Find the pixels that make up the perimeter
