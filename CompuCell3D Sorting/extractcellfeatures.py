@@ -1,6 +1,6 @@
 #
 # Last modified: 19 May 2016
-# Authors: Darrick Lee <y.l.darrick@gmail.com>, Dhananjay Bhaskar <dbhaskar92@gmail.com>
+# Authors: Darrick Lee <y.l.darrick@gmail.com>, Dhananjay Bhaskar <dbhaskar92@gmail.com>, MoHan Zhang <mohan_z2hotmail.com>
 # Description: Compute features from list of pixels representing a Cellular Potts Model (CPM) cell
 #
 
@@ -52,13 +52,13 @@ class ExtractFeatures:
         self.spl_poly = None # Spline tck variables approximating 3pv-polygon
         self.spl_u = None # Spline parameter
         self.spl_k = None # Spline curvature
-
-        self.cell_to_image()
-
+        
         self.ferret_max = None # Maximum ferret diameter for the cell
         self.ferret_min = None # Minimum ferret diameter for the cell
 
         self.hu_moments = None # Array of 7 Hu-moments
+
+        self.cell_to_image()
 
         # Check how many connected components there are
         s = [[1,1,1],[1,1,1],[1,1,1]] # Used to allow diagonal connections
@@ -81,8 +81,7 @@ class ExtractFeatures:
 
         eroded_image_open = NDI.binary_opening(eroded_image, structure=NP.ones((3,3)))
         eroded_image_open2 = NDI.binary_erosion(eroded_image_open)
-
-        # self.perim_img = self.cell_img - eroded_image
+        
         self.eroded_img = eroded_image_open - eroded_image_open2
         self.perim_img = self.cell_img - eroded_image
 
@@ -232,16 +231,19 @@ class ExtractFeatures:
         major_lower = []
         minor_upper = []
         minor_lower = []
+        
         # initialize max/min distances to the axes
         major_max = 0
         major_min = 0
         minor_max = 0
         minor_min = 0
+        
         # initialize furthest point to the axes
         major_up_point = (0,0) # point on top of major axes that is the furthest away
         major_low_point = (0,0) # point below major axes that is the furthest away
         minor_up_point = (0,0) # point to the right of minor axes that is the furthest away
         minor_low_point = (0,0) # point to the left of minor axes that is the furthest away
+        
         # classify each boundary point, calculate distance, and record max distances seen so far
         for i in range(X):
             x = boundary_points[i][0]
@@ -270,6 +272,7 @@ class ExtractFeatures:
                 if (dist_minor > minor_min):
                     minor_min = dist_minor
                     minor_low_point = boundary_points[i]
+                    
         # calculate vertices of the rectangle based on points classified
         t_lx = (major_up_point[0]*NP.tan(angle)+minor_up_point[0]*self.cot(angle)+minor_up_point[1]-major_up_point[1])/(NP.tan(angle)+self.cot(angle))
         t_ly = (major_up_point[1]*self.cot(angle)+minor_up_point[1]*NP.tan(angle)+minor_up_point[0]-major_up_point[0])/(NP.tan(angle)+self.cot(angle))
@@ -282,11 +285,13 @@ class ExtractFeatures:
 
         b_rx = (major_low_point[0]*NP.tan(angle)+minor_low_point[0]*self.cot(angle)+minor_low_point[1]-major_low_point[1])/(NP.tan(angle)+self.cot(angle))
         b_ry = (major_low_point[1]*self.cot(angle)+minor_low_point[1]*NP.tan(angle)+minor_low_point[0]-major_low_point[0])/(NP.tan(angle)+self.cot(angle))
+        
         # make the vertices into tuples
         top_left = (t_lx,t_ly)
         top_right = (t_rx, t_ry)
         bot_left = (b_lx,b_ly)
         bot_right = (b_rx,b_ry)
+        
         # return the list of vertices, top_left twice so that plt could join the sides of the rectangle
         self.ret_fvector=[top_left,top_right,bot_right,bot_left,top_left]
 
@@ -333,13 +338,14 @@ class ExtractFeatures:
         cvx_perim_img = NP.lib.pad(cvx_perim_img,(1,1),'constant') # Pad with 0's for perimeter code to work properly
         _, cvx_perim, _ = perimeter_3pvm.perimeter_3pvm(cvx_perim_img)
 
-
         # Calculate shape factors
-        # compactness = area**2/(NP.pi*2*NP.sqrt(inertia_ev[0]**2 + inertia_ev[1]**2))
-        compactness = NP.sqrt((4*area)/NP.pi)/(self.ferret_max) # sqrt(4(area)/pi)/(Max ferret diameter)
-        elongation = 1-(self.ferret_min/self.ferret_max) # 1 - aspect ratio
+        # TODO: create a separate RECT method to compute these
+        compactness = NP.sqrt((4*area)/NP.pi)/(self.ferret_max)
+        elongation = 1-(self.ferret_min/self.ferret_max) 
         convexity = cvx_perim/perim
         circularity = 4*NP.pi*area/(perim**2)
+        
+        # TODO: remove these
         extension = area/(NP.pi*ellipse_prop_list[4]*ellipse_prop_list[5]/4.0) #Extension = Area of cell/area of ellipse fit?
         dispersion = 0 #set to 0 for now
 
@@ -348,10 +354,12 @@ class ExtractFeatures:
         self.shape_fvector.append(props[0].extent) # Ratio of pixels in the region to pixel in bounding box (from 0 to 1)
         self.shape_fvector.append(props[0].euler_number) # Euler number
         self.shape_fvector.append(props[0].solidity) # Ratio of pixels in the region to pixels of the convex hull image (from 0 to 1)
-        self.shape_fvector.append(compactness) # Ratio of squared area to magnitude of second moments (circle = 1, I-shape << 1)
-        self.shape_fvector.append(elongation) # Square root of ratio of two second moments (smaller over larger) (from 0 to 1)
+        self.shape_fvector.append(compactness) # sqrt(4(area)/pi)/(Max ferret diameter)
+        self.shape_fvector.append(elongation) # # 1 - aspect ratio
         self.shape_fvector.append(convexity) # Ratio of convex hull perimeter to perimeter (from 0 to 1)
         self.shape_fvector.append(circularity) # Ratio of area to perimeter squared (circle = 1, starfish << 1)
+        
+        # TODO: remove these
         self.shape_fvector.append(extension)
         self.shape_fvector.append(dispersion)
 
@@ -405,4 +413,3 @@ class ExtractFeatures:
         props = skimage.measure.regionprops(self.cell_img)
         self.hu_moments = list(props[0].moments_hu)
         return
-
