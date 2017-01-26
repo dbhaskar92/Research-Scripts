@@ -2,7 +2,7 @@
 
 #
 # Last modified: 19 May 2016
-# Author: Darrick Lee <y.l.darrick@gmail.com>, Dhananjay Bhaskar <dbhaskar92@gmail.com>
+# Author: Darrick Lee <y.l.darrick@gmail.com>, Dhananjay Bhaskar <dbhaskar92@gmail.com>, MoHan Zhang <mohan_z@hotmail.com>
 # Extract cell shape features from PIF file
 # 
 
@@ -197,18 +197,21 @@ def contains_isolated_cells():
     else:
         return False
 
-# Conversion functions
-def conv_distance(x):#MIA PaCa Phase Contrast Microscopy
+## SCALING ####################################################################
+
+# for MIAPaCa (Pancreatic Cancer) Phase Contrast Microscopy
+
+def conv_distance(x):
     conv_factor = 0.4
     units = 'um'
     return x*conv_factor, units
 
-def conv_time(x):#MIA PaCa Phase Contrast Microscopy
+def conv_time(x):
     conv_factor = 0.2
     units = 'min'
     return x*conv_factor, units
 
-def conv_area(x):#MIA PaCa Phase Contrast Microscopy
+def conv_area(x):
     conv_factor = 0.16
     units = 'um^2'
     return x*conv_factor, units
@@ -225,11 +228,11 @@ def TestSingleCellPlot(extractor):
 
     perim_img_ind = NP.where(fixed_perim == 1)
 
-    xlim_min = min(perim_img_ind[1])-2
-    xlim_max = max(perim_img_ind[1])+2
+    xlim_min = min(perim_img_ind[1])-5
+    xlim_max = max(perim_img_ind[1])+5
 
-    ylim_min = min(perim_img_ind[0])-2
-    ylim_max = max(perim_img_ind[0])+2
+    ylim_min = min(perim_img_ind[0])-5
+    ylim_max = max(perim_img_ind[0])+5
 
     U = extractor.spl_u
     OUT = interpolate.splev(U, extractor.spl_poly)
@@ -269,7 +272,7 @@ def TestSingleCellPlot(extractor):
     PLT.plot(0,0,color='blue',label='Circle (var = %.3f)'%extractor.ccm_fvector[5],lw=3)
     PLT.plot(0,0,color='orange',label='Ellipse (var = %.3f)'%extractor.ellipse_fvector[8],lw=3)
 
-    # Bounding rectangle
+    # Create oriented bounding rectangle plot
     verts = extractor.ret_fvector
     codes = [Path.MOVETO,
          Path.LINETO,
@@ -281,12 +284,6 @@ def TestSingleCellPlot(extractor):
     patch = patches.PathPatch(path, facecolor='none', lw=2)
     ax.add_patch(patch)
     PLT.plot(0,0,color='black',label='Rectangle',lw=3)
-    #x_coord = [x[0] for x in verts]
-    #y_coord = [x[1] for x in verts]
-    #print x_coord
-    #PLT.plot(x_coord,y_coord)
-
-
 
     lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=1, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
 
@@ -834,8 +831,6 @@ if createcsv:
         cellFeat.pop(featIndexDict['SHAPE']['solidity'])
         cellFeat.pop(featIndexDict['SHAPE']['euler_number'])
         cellFeat.pop(featIndexDict['SHAPE']['extent'])
-
-
 
         cellFeat.pop(featIndexDict['CCM']['centroid_y'])
         cellFeat.pop(featIndexDict['CCM']['centroid_x'])
