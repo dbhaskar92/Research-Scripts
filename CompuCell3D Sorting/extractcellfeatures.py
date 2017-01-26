@@ -55,6 +55,11 @@ class ExtractFeatures:
 
         self.cell_to_image()
 
+        self.ferret_max = None # Maximum ferret diameter for the cell
+        self.ferret_min = None # Minimum ferret diameter for the cell
+
+        self.hu_moments = None # Array of 7 Hu-moments
+
         # Check how many connected components there are
         s = [[1,1,1],[1,1,1],[1,1,1]] # Used to allow diagonal connections
         _, self.connectedComp = NDI.measurements.label(self.cell_img,structure=s)
@@ -207,41 +212,7 @@ class ExtractFeatures:
         props = skimage.measure.regionprops(self.cell_img)
 
         centroid = props[0].centroid
-        print self.perim_coord.shape
-        print self.perim_coord[0][0]
-        print self.perim_coord[0][1]
-        # Calculate ellipse variance
-        perim_coord = NP.transpose(self.perim_coord)
-        numPt = len(perim_coord[0])
-        cov = NP.mat(NP.cov(perim_coord))
-        V = NP.array([perim_coord[0] - centroid[0], perim_coord[1] - centroid[1]])
-        cV = NP.array(NP.linalg.inv(cov)*NP.mat(V))
-        d = NP.sqrt(V[0]*cV[0] + V[1]*cV[1])
-        mu = NP.sum(d)/numPt
-        sigma = NP.sqrt(NP.sum((d-mu)**2)/numPt)
-
-        ellipse_prop_list = [centroid[0]]
-        ellipse_prop_list.append(centroid[1])
-        ellipse_prop_list.append(props[0].eccentricity)
-        ellipse_prop_list.append(props[0].major_axis_length)
-        ellipse_prop_list.append(props[0].minor_axis_length)
-        ellipse_prop_list.append(props[0].orientation) # In degrees starting from the x-axis
-        ellipse_prop_list.append(NP.pi*ellipse_prop_list[4]*ellipse_prop_list[5]/4.0) # Ellipse area
-        ellipse_prop_list.append(2.0*ellipse_prop_list[4]*scipy.special.ellipe(props[0].eccentricity**2)) # Ellipse perimeter, parameter to special.ellipe should be eccentricity**2
-        ellipse_prop_list.append(sigma/mu) # Ellipse variance
-
-        self.ellipse_fvector = ellipse_prop_list
-
-        # NOTE: For shape factors, we use the perim_poly for perimeter, and pixel counting for area
-
-        # Calculate values needed for shape factors
-        inertia_ev = props[0].inertia_tensor_eigvals
-        area = self.area_cell
-        perim = self.perim_poly
-
-
         # Calculate minimum bounding rectangle
-        #angle = props[0].orientation
         boundary_points = self.perim_coord #list of boundary points
         # compute centroid
         x_bar = centroid[0]
@@ -257,8 +228,6 @@ class ExtractFeatures:
             top_sum += (x-x_bar)*(y-y_bar) # sum((xi-xbar)*(yi-ybar)
             bot_sum += ((x-x_bar)**2-(y-y_bar)**2) # (xi-xbar)^2-(yi-ybar)^2)
         angle = (NP.arctan((2*top_sum)/bot_sum))/2
-        # angle = props[0].orientation
-
         major_upper = [] # list of boundary points upper of major axes
         major_lower = []
         minor_upper = []
@@ -318,18 +287,45 @@ class ExtractFeatures:
         top_right = (t_rx, t_ry)
         bot_left = (b_lx,b_ly)
         bot_right = (b_rx,b_ry)
-        print major_up_point
-        print major_low_point
-        print minor_up_point
-        print minor_low_point
-        print top_left
-        print top_right
-        print bot_left
-        print bot_right
         # return the list of vertices, top_left twice so that plt could join the sides of the rectangle
         self.ret_fvector=[top_left,top_right,bot_right,bot_left,top_left]
-        #self.ret_fvector=[major_up_point,major_low_point,minor_up_point,minor_low_point,major_up_point]
 
+        # Calculate ellipse variance
+        perim_coord = NP.transpose(self.perim_coord)
+        numPt = len(perim_coord[0])
+        cov = NP.mat(NP.cov(perim_coord))
+        V = NP.array([perim_coord[0] - centroid[0], perim_coord[1] - centroid[1]])
+        cV = NP.array(NP.linalg.inv(cov)*NP.mat(V))
+        d = NP.sqrt(V[0]*cV[0] + V[1]*cV[1])
+        mu = NP.sum(d)/numPt
+        sigma = NP.sqrt(NP.sum((d-mu)**2)/numPt)
+
+        ellipse_prop_list = [centroid[0]]
+        ellipse_prop_list.append(centroid[1])
+        ellipse_prop_list.append(props[0].eccentricity)
+        ellipse_prop_list.append(props[0].major_axis_length)
+        ellipse_prop_list.append(props[0].minor_axis_length)
+        ellipse_prop_list.append(props[0].orientation) # In degrees starting from the x-axis
+        ellipse_prop_list.append(NP.pi*ellipse_prop_list[4]*ellipse_prop_list[5]/4.0) # Ellipse area
+        ellipse_prop_list.append(2.0*ellipse_prop_list[4]*scipy.special.ellipe(props[0].eccentricity**2)) # Ellipse perimeter, parameter to special.ellipe should be eccentricity**2
+        ellipse_prop_list.append(sigma/mu) # Ellipse variance
+
+        self.ellipse_fvector = ellipse_prop_list
+
+        # NOTE: For shape factors, we use the perim_poly for perimeter, and pixel counting for area
+
+        # Calculate values needed for shape factors
+        inertia_ev = props[0].inertia_tensor_eigvals
+        area = self.area_cell
+        perim = self.perim_poly
+
+        # Calculate Ferret diameters (max and min) using vertices of the minimum bounding rectange)
+        d1 = NP.sqrt((top_left[0]-top_right[0])**2 + (top_right[1]-top_left[1])**2)
+        d2 = NP.sqrt((top_left[0]-bot_left[0])**2 + (bot_left[1]-top_left[1])**2)
+        self.ferret_max = max(d1,d2)
+        self.ferret_min = min(d1,d2)
+        print self.ferret_max
+        print props[0].major_axis_length
         # Calculate convex hull perimeter
         cvx_img = props[0].convex_image # Find the pixels that make up the perimeter
         eroded_cvx_img = NDI.binary_erosion(cvx_img)
@@ -340,8 +336,8 @@ class ExtractFeatures:
 
         # Calculate shape factors
         # compactness = area**2/(NP.pi*2*NP.sqrt(inertia_ev[0]**2 + inertia_ev[1]**2))
-        compactness = NP.sqrt((4*area)/NP.pi)/(props[0].major_axis_length) # sqrt(4(area)/pi)/(MaximumDiameter of Ellipse Fit)
-        elongation = 1-(props[0].minor_axis_length/props[0].major_axis_length)
+        compactness = NP.sqrt((4*area)/NP.pi)/(self.ferret_max) # sqrt(4(area)/pi)/(Max ferret diameter)
+        elongation = 1-(self.ferret_min/self.ferret_max) # 1 - aspect ratio
         convexity = cvx_perim/perim
         circularity = 4*NP.pi*area/(perim**2)
         extension = area/(NP.pi*ellipse_prop_list[4]*ellipse_prop_list[5]/4.0) #Extension = Area of cell/area of ellipse fit?
@@ -399,3 +395,14 @@ class ExtractFeatures:
 
         self.ccm_fvector = cell_centre_features
         return
+
+    def moments(self):
+
+        '''
+        Description: Returns the 7 Hu-moments, Legendre-moment, as well as Zernicke-moment
+
+        '''
+        props = skimage.measure.regionprops(self.cell_img)
+        self.hu_moments = list(props[0].moments_hu)
+        return
+

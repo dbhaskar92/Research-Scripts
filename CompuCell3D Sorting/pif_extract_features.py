@@ -361,6 +361,7 @@ for cell_id in cellDict.keys():
             thread_list.append(threading.Thread(target=extractor.basic_props(splineSmooth), args=(), kwargs={}))
             thread_list.append(threading.Thread(target=extractor.shape_props(), args=(), kwargs={}))
             thread_list.append(threading.Thread(target=extractor.cell_centre_fit(), args=(), kwargs={}))
+            thread_list.append(threading.Thread(target=extractor.moments(), args=(), kwargs={}))
 
             for thread in thread_list:
                 thread.start()
@@ -371,14 +372,16 @@ for cell_id in cellDict.keys():
             extractor.basic_props(splineSmooth)
             extractor.shape_props()
             extractor.cell_centre_fit()
+            extractor.moments()
 
-        featureDict[cell_id] = [extractor.area_cell, extractor.perim_1sqrt2, extractor.equiv_diameter]
+        featureDict[cell_id] = [extractor.area_cell, extractor.perim_1sqrt2, extractor.equiv_diameter, extractor.ferret_max, extractor.ferret_min]
         featureDict[cell_id] = featureDict[cell_id] +  [extractor.perim_3pv]
         featureDict[cell_id] = featureDict[cell_id] + [extractor.perim_poly, extractor.area_poly]
         featureDict[cell_id] = featureDict[cell_id] + extractor.ellipse_fvector + extractor.ccm_fvector
         featureDict[cell_id] = featureDict[cell_id] + [extractor.perim_eroded,  extractor.area_eroded]
         featureDict[cell_id] = featureDict[cell_id] + extractor.bdy_fvector
         featureDict[cell_id] = featureDict[cell_id] + extractor.shape_fvector
+        featureDict[cell_id] = featureDict[cell_id] + extractor.hu_moments
 
         polyPtDict[cell_id] = extractor.perim_coord_poly
 
@@ -393,7 +396,7 @@ for cell_id in cellDict.keys():
 ## CONSTRUCT FEATINDEXDICT ####################################################
 
 featIndexDict = dict(BASIC=None, ELLIPSE=None, CCM=None, TPV=None, ERODED=None, POLY=None, BDY=None, SHAPE=None)
-BASIC_numfeat = 3
+BASIC_numfeat = 5
 TPV_numfeat = 1
 POLY_numfeat = 2
 ELLIPSE_numfeat = 9
@@ -401,6 +404,7 @@ CCM_numfeat = 6
 ERODED_numfeat = 2
 BDY_numfeat = 6
 SHAPE_numfeat = 9
+MOMENTS_numfeat = 7
 
 TPV_start = BASIC_numfeat
 POLY_start = TPV_start + TPV_numfeat
@@ -409,11 +413,14 @@ CCM_start = ELLIPSE_start + ELLIPSE_numfeat
 ERODED_start = CCM_start + CCM_numfeat
 BDY_start = ERODED_start + ERODED_numfeat
 SHAPE_start = BDY_start + BDY_numfeat
+MOMENTS_start = SHAPE_start + SHAPE_numfeat
 
 featIndexDict['BASIC'] = dict(
     area = 0,
     perimeter =1,
-    equiv_diameter=2)
+    equiv_diameter=2,
+    ferret_max = 3,
+    ferret_min = 4)
 
 featIndexDict['TPV'] = dict(
     perimeter=TPV_start)
@@ -463,6 +470,17 @@ featIndexDict['SHAPE'] = dict(
     circularity=SHAPE_start+6,
     extension=SHAPE_start+7,
     dispersion=SHAPE_start+8)
+
+featIndexDict['MOMENTS'] = dict(
+    hu_moment_one=MOMENTS_start,
+    hu_moment_two=MOMENTS_start+1,
+    hu_moment_three=MOMENTS_start+2,
+    hu_moment_four=MOMENTS_start+3,
+    hu_moment_five=MOMENTS_start+4,
+    hu_moment_six=MOMENTS_start+5,
+    hu_moment_seven=MOMENTS_start+6
+
+)
 
 ## PRODUCE LATTICE PLOTS WITH FITS ############################################
 
@@ -834,13 +852,14 @@ if createcsv:
 
     # Create feature name list
     featNamesOrig = []
-    featNamesOrig = featNamesOrig + ['BASIC_area', 'BASIC_perimeter', 'BASIC_equiv_diameter']
+    featNamesOrig = featNamesOrig + ['BASIC_area', 'BASIC_perimeter', 'BASIC_equiv_diameter', 'BASIC_max_ferret_diameter', 'BASIC_min_ferret_diameter']
     featNamesOrig = featNamesOrig + ['TPV_perimeter']
     featNamesOrig = featNamesOrig + ['POLY_perimeter', 'POLY_area']
     featNamesOrig = featNamesOrig + ['ELLIPSE_eccentricity', 'ELLIPSE_major_axis_length', 'ELLIPSE_minor_axis_length', 'ELLIPSE_orientation', 'ELLIPSE_area', 'ELLIPSE_perimeter', 'ELLIPSE_variance']
     featNamesOrig = featNamesOrig + ['CCM_radius', 'CCM_perimeter', 'CCM_area', 'CCM_variance']
     featNamesOrig = featNamesOrig + ['ERODED_perimeter', 'ERODED_area']
     featNamesOrig = featNamesOrig + ['BDY_maxpos', 'BDY_minpos', 'BDY_maxneg', 'BDY_minneg', 'BDY_num_extrema', 'BDY_signflip']
+    featNamesOrig = featNamesOrig + ['Hu_moment_1st', 'Hu_moment_2nd', 'Hu_moment_3rd', 'Hu_moment_4th', 'Hu_moment_5th', 'Hu_moment_6th','Hu_moment_7th']
     numFeat = len(featNamesOrig)
 
     # Transpose lists and create standardized lists
