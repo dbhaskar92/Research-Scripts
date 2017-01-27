@@ -272,21 +272,8 @@ def TestSingleCellPlot(extractor):
     PLT.plot(0,0,color='blue',label='Circle (var = %.3f)'%extractor.ccm_fvector[5],lw=3)
     PLT.plot(0,0,color='orange',label='Ellipse (var = %.3f)'%extractor.ellipse_fvector[8],lw=3)
 
-    # Create oriented bounding rectangle plot
-    verts = extractor.ret_fvector
-    codes = [Path.MOVETO,
-         Path.LINETO,
-         Path.LINETO,
-         Path.LINETO,
-         Path.CLOSEPOLY,
-         ]
-    path = Path(verts,codes)
-    patch = patches.PathPatch(path, facecolor='none', lw=2)
-    ax.add_patch(patch)
-    PLT.plot(0,0,color='black',label='Rectangle',lw=3)
 
     lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=1, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
-
     ax.set_xlim([xlim_min, xlim_max])
     ax.set_ylim([ylim_min, ylim_max])
     PLT.savefig(outFolder+pifFileName + '_Fits.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
@@ -328,6 +315,30 @@ def TestSingleCellPlot(extractor):
 
     PLT.savefig(outFolder+pifFileName + '_SplineCurvatureBin.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
 
+    # Create oriented bounding rectangle plot
+    fig = PLT.figure(4)
+    ax = fig.add_subplot(111, aspect='equal')
+    PLT.imshow(fixed_perim, interpolation='nearest', cmap='Greys')
+    verts = extractor.ret_pvector
+    codes = [Path.MOVETO,
+         Path.LINETO,
+         Path.LINETO,
+         Path.LINETO,
+         Path.CLOSEPOLY,
+         ]
+    path = Path(verts,codes)
+    patch = patches.PathPatch(path, facecolor='none', edgecolor='red', lw=2)
+    ax.add_patch(patch)
+    PLT.plot(0,0,color='red',label='Rectangle',lw=3)
+    xlim_rec_min = min(verts[0][0],verts[3][0])-5 # Take the minimum of x coordinates of top_left and bot_left vertices
+    xlim_rec_max = max(verts[1][0],verts[2][0])+5 # Take the maximum of x coordinates of top_right and bot_right vertices
+    ylim_rec_min = min(verts[3][1],verts[2][1])-5 # Take the minimum of y coordinates of bot_left and bot_right vertices
+    ylim_rec_max = max(verts[0][1],verts[1][1])+5 # Take the maximum of y coordinates of top_left and top_right vertices
+    ax.set_xlim([xlim_rec_min-5, xlim_rec_max+5])
+    ax.set_ylim([ylim_rec_min-5, ylim_rec_max+5])
+    lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=1, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
+    PLT.savefig(outFolder+pifFileName + '_RectangularFit.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
+
 
 ## COMPUTE FEATURES FOR ALL CELLS #############################################
 
@@ -335,6 +346,7 @@ featureDict = dict()
 polyPtDict = dict()
 splinePtDict = dict()
 curvatureDict = dict()
+rectPtDict = dict()
 
 for cell_id in cellDict.keys():	
     if testCell != -1:
@@ -371,16 +383,19 @@ for cell_id in cellDict.keys():
             extractor.cell_centre_fit()
             extractor.moments()
 
-        featureDict[cell_id] = [extractor.area_cell, extractor.perim_1sqrt2, extractor.equiv_diameter, extractor.ferret_max, extractor.ferret_min]
+        featureDict[cell_id] = [extractor.area_cell, extractor.perim_1sqrt2, extractor.equiv_diameter]
         featureDict[cell_id] = featureDict[cell_id] +  [extractor.perim_3pv]
         featureDict[cell_id] = featureDict[cell_id] + [extractor.perim_poly, extractor.area_poly]
         featureDict[cell_id] = featureDict[cell_id] + extractor.ellipse_fvector + extractor.ccm_fvector
         featureDict[cell_id] = featureDict[cell_id] + [extractor.perim_eroded,  extractor.area_eroded]
         featureDict[cell_id] = featureDict[cell_id] + extractor.bdy_fvector
         featureDict[cell_id] = featureDict[cell_id] + extractor.shape_fvector
+        featureDict[cell_id] = featureDict[cell_id] + extractor.ret_fvector
         featureDict[cell_id] = featureDict[cell_id] + extractor.hu_moments
 
         polyPtDict[cell_id] = extractor.perim_coord_poly
+        rectPtDict[cell_id] = extractor.ret_pvector
+
 
         # Generate warning if euler number is less than 1:
         if(extractor.shape_fvector[1] < 1):
@@ -392,15 +407,16 @@ for cell_id in cellDict.keys():
 
 ## CONSTRUCT FEATINDEXDICT ####################################################
 
-featIndexDict = dict(BASIC=None, ELLIPSE=None, CCM=None, TPV=None, ERODED=None, POLY=None, BDY=None, SHAPE=None)
-BASIC_numfeat = 5
+featIndexDict = dict(BASIC=None, ELLIPSE=None, CCM=None, TPV=None, ERODED=None, POLY=None, BDY=None, SHAPE=None, RECT=None, MOMENTS=None)
+BASIC_numfeat = 3
 TPV_numfeat = 1
 POLY_numfeat = 2
 ELLIPSE_numfeat = 9
 CCM_numfeat = 6
+RECT_numfeat = 5
 ERODED_numfeat = 2
 BDY_numfeat = 6
-SHAPE_numfeat = 9
+SHAPE_numfeat = 7
 MOMENTS_numfeat = 7
 
 TPV_start = BASIC_numfeat
@@ -410,14 +426,14 @@ CCM_start = ELLIPSE_start + ELLIPSE_numfeat
 ERODED_start = CCM_start + CCM_numfeat
 BDY_start = ERODED_start + ERODED_numfeat
 SHAPE_start = BDY_start + BDY_numfeat
-MOMENTS_start = SHAPE_start + SHAPE_numfeat
+RECT_start = SHAPE_start + SHAPE_numfeat
+MOMENTS_start = RECT_start + RECT_numfeat
 
 featIndexDict['BASIC'] = dict(
     area = 0,
     perimeter =1,
     equiv_diameter=2,
-    ferret_max = 3,
-    ferret_min = 4)
+    )
 
 featIndexDict['TPV'] = dict(
     perimeter=TPV_start)
@@ -445,6 +461,14 @@ featIndexDict['CCM'] = dict(
     area=CCM_start+4,
     variance=CCM_start+5)
 
+featIndexDict['RECT'] = dict(
+    centroid_x=RECT_start,
+    centroid_y=RECT_start+1,
+    orientation=RECT_start+2,
+    ferret_max=RECT_start+3,
+    ferret_min=RECT_start+4
+)
+
 featIndexDict['ERODED'] = dict(
     perimeter=ERODED_start,
     area=ERODED_start+1)
@@ -465,8 +489,7 @@ featIndexDict['SHAPE'] = dict(
     elongation=SHAPE_start+4,
     convexity=SHAPE_start+5,
     circularity=SHAPE_start+6,
-    extension=SHAPE_start+7,
-    dispersion=SHAPE_start+8)
+)
 
 featIndexDict['MOMENTS'] = dict(
     hu_moment_one=MOMENTS_start,
@@ -620,6 +643,41 @@ if plotfits:
         ax.set_xlim([0,l_width])
         ax.set_ylim([0,l_height])
     PLT.savefig(splineOut + pifFileName + '_SplineFit.png', bbox_inches='tight', dpi = imgDPI)
+
+    # Plot Rectangular Fits
+    numFigs += 1
+    fig = PLT.figure(numFigs)
+    ax = fig.add_subplot(111, aspect='equal')
+
+    rects = [[rectPtDict[cell_id],
+        cellTypeDict[cell_id]] for cell_id in cellDict.keys()]
+
+    for re in rects:
+        verts = re[0]
+        ctype = re[1]
+        codes = [Path.MOVETO,
+         Path.LINETO,
+         Path.LINETO,
+         Path.LINETO,
+         Path.CLOSEPOLY,
+         ]
+        path = Path(verts,codes)
+        if ctype == 'CellU':
+            patch = patches.PathPatch(path, facecolor=[0,1,0], edgecolor='green', lw=1, alpha=0.3)
+        elif ctype == 'CellV':
+            patch = patches.PathPatch(path, facecolor=[1,0,0], edgecolor='green', lw=1, alpha=0.3)
+        else:
+            patch = patches.PathPatch(path, facecolor=[0,0,1], edgecolor='green', lw=1, alpha=0.3)
+        ax.add_patch(patch)
+        PLT.plot(0,0,color='green',label='Rectangle',lw=1)
+
+    if plotZoom != -1:
+        ax.set_xlim([plotZoom,l_width-plotZoom])
+        ax.set_ylim([plotZoom,l_height-plotZoom])
+    else:
+        ax.set_xlim([0,l_width])
+        ax.set_ylim([0,l_height])
+    PLT.savefig(splineOut + pifFileName + '_RectangularFit.png', bbox_inches='tight', dpi = imgDPI)
 
     # Plot spline model with curvature dependent boundary
     if curvSpline:
@@ -804,6 +862,8 @@ if createcsv:
         cellLoc.append(featureDict[cell_id][featIndexDict['ELLIPSE']['centroid_y']])
         cellLoc.append(featureDict[cell_id][featIndexDict['CCM']['centroid_x']])
         cellLoc.append(featureDict[cell_id][featIndexDict['CCM']['centroid_y']])
+        cellLoc.append(featureDict[cell_id][featIndexDict['RECT']['centroid_x']])
+        cellLoc.append(featureDict[cell_id][featIndexDict['RECT']['centroid_y']])
         locationList.append(list(cellLoc))
 
         # cellNondim
@@ -815,15 +875,11 @@ if createcsv:
         cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['elongation']])
         cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['convexity']])
         cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['circularity']])
-        cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['extension']])
-        cellNondim.append(featureDict[cell_id][featIndexDict['SHAPE']['dispersion']])
         nondimList.append(list(cellNondim))
 
         # Create feature vector for the cell, but remove centroids as they are in the location list
         # Also remove nondimensional shape factors
         cellFeat = list(featureDict[cell_id])
-        cellFeat.pop(featIndexDict['SHAPE']['dispersion'])
-        cellFeat.pop(featIndexDict['SHAPE']['extension'])
         cellFeat.pop(featIndexDict['SHAPE']['circularity'])
         cellFeat.pop(featIndexDict['SHAPE']['convexity'])
         cellFeat.pop(featIndexDict['SHAPE']['elongation'])
@@ -832,26 +888,30 @@ if createcsv:
         cellFeat.pop(featIndexDict['SHAPE']['euler_number'])
         cellFeat.pop(featIndexDict['SHAPE']['extent'])
 
+        cellFeat.pop(featIndexDict['RECT']['centroid_y'])
+        cellFeat.pop(featIndexDict['RECT']['centroid_x'])
         cellFeat.pop(featIndexDict['CCM']['centroid_y'])
         cellFeat.pop(featIndexDict['CCM']['centroid_x'])
         cellFeat.pop(featIndexDict['ELLIPSE']['centroid_y'])
         cellFeat.pop(featIndexDict['ELLIPSE']['centroid_x'])
 
+
         featListOrig.append(cellFeat)
 
     # Create location name list
-    locationNames = ['Cell_ID', 'ELLIPSE_centroid_x', 'ELLIPSE_centroid_y', 'CCM_centroid_x', 'CCM_centroid_y']
+    locationNames = ['Cell_ID', 'ELLIPSE_centroid_x', 'ELLIPSE_centroid_y', 'CCM_centroid_x', 'CCM_centroid_y', 'RECT_centroid_x', 'RECT_centroid_y']
 
     # Create nondimensional factors name list
-    nondimNames = ['SHAPE_extent', 'SHAPE_euler_number', 'SHAPE_solidity', 'SHAPE_compactness', 'SHAPE_elongation', 'SHAPE_convexity', 'SHAPE_circularity', 'SHAPE_extension', 'SHAPE_dispersion']
+    nondimNames = ['SHAPE_extent', 'SHAPE_euler_number', 'SHAPE_solidity', 'SHAPE_compactness', 'SHAPE_elongation', 'SHAPE_convexity', 'SHAPE_circularity']
 
     # Create feature name list
     featNamesOrig = []
-    featNamesOrig = featNamesOrig + ['BASIC_area', 'BASIC_perimeter', 'BASIC_equiv_diameter', 'BASIC_max_ferret_diameter', 'BASIC_min_ferret_diameter']
+    featNamesOrig = featNamesOrig + ['BASIC_area', 'BASIC_perimeter', 'BASIC_equiv_diameter']
     featNamesOrig = featNamesOrig + ['TPV_perimeter']
     featNamesOrig = featNamesOrig + ['POLY_perimeter', 'POLY_area']
     featNamesOrig = featNamesOrig + ['ELLIPSE_eccentricity', 'ELLIPSE_major_axis_length', 'ELLIPSE_minor_axis_length', 'ELLIPSE_orientation', 'ELLIPSE_area', 'ELLIPSE_perimeter', 'ELLIPSE_variance']
     featNamesOrig = featNamesOrig + ['CCM_radius', 'CCM_perimeter', 'CCM_area', 'CCM_variance']
+    featNamesOrig = featNamesOrig + ['RECT_orientation', 'RECT_major_axis_length', 'RECT_minor_axis_length']
     featNamesOrig = featNamesOrig + ['ERODED_perimeter', 'ERODED_area']
     featNamesOrig = featNamesOrig + ['BDY_maxpos', 'BDY_minpos', 'BDY_maxneg', 'BDY_minneg', 'BDY_num_extrema', 'BDY_signflip']
     featNamesOrig = featNamesOrig + ['Hu_moment_1st', 'Hu_moment_2nd', 'Hu_moment_3rd', 'Hu_moment_4th', 'Hu_moment_5th', 'Hu_moment_6th','Hu_moment_7th']
@@ -865,8 +925,8 @@ if createcsv:
     featNamesStd = list(featNamesOrig)
 
     # Select the index of elements to scale
-    dist_index = [1,2,3,4,7,8,11,13,14,17]
-    loc_index = [1,2,3,4]
+    dist_index = [1,2,3,4,7,8,11,13,14,18,19,20]
+    loc_index = [1,2,3,4,5,6]
     area_index = [0,5,10,15,18]
 
     for i in dist_index:
