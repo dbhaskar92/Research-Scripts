@@ -46,7 +46,8 @@ class ExtractFeatures:
         self.ellipse_fvector = None # Features from ellipse fit
         self.shape_fvector = None # Shape factors
         self.ccm_fvector = None # Features from CCM fit
-        self.ret_fvector = None # Rectangular fit
+        self.ret_pvector = None # Rectangular fit, for plotting
+        self.ret_fvector = None # Rectangular fit, feature vector
         self.bdy_fvector = None # Features based on boundary
 
         self.spl_poly = None # Spline tck variables approximating 3pv-polygon
@@ -182,6 +183,120 @@ class ExtractFeatures:
     def cot(self,angle):
         return 1/NP.tan(angle)
 
+    def rect(self):
+        '''
+                Calculate minimum bounding rectangle
+        '''
+        boundary_points = self.perim_coord #list of boundary points
+
+        # size of boundary points list
+        X, Y = boundary_points.shape
+
+        # compute centroid
+        x_sum = 0
+        y_sum = 0
+        for i in range(X):
+            x = boundary_points[i][0]
+            y = boundary_points[i][1]
+            x_sum += x
+            y_sum += y
+        #x_bar = x_sum/X
+        #y_bar = y_sum/X
+        props = skimage.measure.regionprops(self.cell_img)
+
+        centroid = props[0].centroid
+        # compute centroid
+        x_bar = centroid[0]
+        y_bar = centroid[1]
+        #print x_bar_1
+        #print x_bar
+        #print y_bar_1
+        #print y_bar
+        # compute angle using the formula tan(2*angle) = 2*(sum((xi-xbar)*(yi-ybar))/((xi-xbar)^2-(yi-ybar)^2))
+        top_sum = 0
+        bot_sum = 0
+        for i in range(X):
+            x = boundary_points[i][0]
+            y = boundary_points[i][1]
+            top_sum += (x-x_bar)*(y-y_bar) # sum((xi-xbar)*(yi-ybar)
+            bot_sum += ((x-x_bar)**2-(y-y_bar)**2) # (xi-xbar)^2-(yi-ybar)^2)
+        angle = (NP.arctan((2*top_sum)/bot_sum))/2
+        major_upper = [] # list of boundary points upper of major axes
+        major_lower = []
+        minor_upper = []
+        minor_lower = []
+
+        # initialize max/min distances to the axes
+        major_max = 0
+        major_min = 0
+        minor_max = 0
+        minor_min = 0
+
+        # initialize furthest point to the axes
+        major_up_point = (0,0) # point on top of major axes that is the furthest away
+        major_low_point = (0,0) # point below major axes that is the furthest away
+        minor_up_point = (0,0) # point to the right of minor axes that is the furthest away
+        minor_low_point = (0,0) # point to the left of minor axes that is the furthest away
+
+        # classify each boundary point, calculate distance, and record max distances seen so far
+        for i in range(X):
+            x = boundary_points[i][0]
+            y = boundary_points[i][1]
+            V_major = (y-y_bar)-NP.tan(angle)*(x-x_bar)
+            V_minor = (y-y_bar)+self.cot(angle)*(x-x_bar)
+            dist_major = ((x-x_bar)*NP.sin(angle)-(y-y_bar)*NP.cos(angle))**2
+            dist_minor = ((x-x_bar)*NP.cos(angle)+(y-y_bar)*NP.sin(angle))**2
+            if (V_major > 0):
+                major_upper.append(boundary_points[i])
+                if (dist_major > major_max):
+                    major_max = dist_major
+                    major_up_point = boundary_points[i]
+            elif (V_major < 0):
+                major_lower.append(boundary_points[i])
+                if (dist_major > major_min):
+                    major_min = dist_major
+                    major_low_point = boundary_points[i]
+            if (V_minor > 0):
+                minor_upper.append(boundary_points[i])
+                if (dist_minor > minor_max):
+                    minor_max = dist_minor
+                    minor_up_point = boundary_points[i]
+            elif (V_minor < 0):
+                minor_lower.append(boundary_points[i])
+                if (dist_minor > minor_min):
+                    minor_min = dist_minor
+                    minor_low_point = boundary_points[i]
+
+        # calculate vertices of the rectangle based on points classified
+        t_lx = (major_up_point[0]*NP.tan(angle)+minor_up_point[0]*self.cot(angle)+minor_up_point[1]-major_up_point[1])/(NP.tan(angle)+self.cot(angle))
+        t_ly = (major_up_point[1]*self.cot(angle)+minor_up_point[1]*NP.tan(angle)+minor_up_point[0]-major_up_point[0])/(NP.tan(angle)+self.cot(angle))
+
+        t_rx = (major_up_point[0]*NP.tan(angle)+minor_low_point[0]*self.cot(angle)+minor_low_point[1]-major_up_point[1])/(NP.tan(angle)+self.cot(angle))
+        t_ry = (major_up_point[1]*self.cot(angle)+minor_low_point[1]*NP.tan(angle)+minor_low_point[0]-major_up_point[0])/(NP.tan(angle)+self.cot(angle))
+
+        b_lx = (major_low_point[0]*NP.tan(angle)+minor_up_point[0]*self.cot(angle)+minor_up_point[1]-major_low_point[1])/(NP.tan(angle)+self.cot(angle))
+        b_ly = (major_low_point[1]*self.cot(angle)+minor_up_point[1]*NP.tan(angle)+minor_up_point[0]-major_low_point[0])/(NP.tan(angle)+self.cot(angle))
+
+        b_rx = (major_low_point[0]*NP.tan(angle)+minor_low_point[0]*self.cot(angle)+minor_low_point[1]-major_low_point[1])/(NP.tan(angle)+self.cot(angle))
+        b_ry = (major_low_point[1]*self.cot(angle)+minor_low_point[1]*NP.tan(angle)+minor_low_point[0]-major_low_point[0])/(NP.tan(angle)+self.cot(angle))
+
+        # make the vertices into tuples
+        top_left = (t_lx,t_ly)
+        top_right = (t_rx, t_ry)
+        bot_left = (b_lx,b_ly)
+        bot_right = (b_rx,b_ry)
+
+        # return the list of vertices, top_left twice so that plt could join the sides of the rectangle
+        self.ret_pvector=[top_left,top_right,bot_right,bot_left,top_left]
+        # Calculate Ferret diameters (max and min) using vertices of the minimum bounding rectange)
+        d1 = NP.sqrt((top_left[0]-top_right[0])**2 + (top_right[1]-top_left[1])**2)
+        d2 = NP.sqrt((top_left[0]-bot_left[0])**2 + (bot_left[1]-top_left[1])**2)
+        self.ferret_max = max(d1,d2)
+        self.ferret_min = min(d1,d2)
+        centroid = (x_bar, y_bar)
+        self.ret_fvector = [centroid[0], centroid[1], angle, self.ferret_max, self.ferret_min]
+
+
     def shape_props(self):
 
         '''
@@ -211,89 +326,6 @@ class ExtractFeatures:
         props = skimage.measure.regionprops(self.cell_img)
 
         centroid = props[0].centroid
-        # Calculate minimum bounding rectangle
-        boundary_points = self.perim_coord #list of boundary points
-        # compute centroid
-        x_bar = centroid[0]
-        y_bar = centroid[1]
-        # size of boundary points list
-        X, Y = boundary_points.shape
-        # compute angle using the formula tan(2*angle) = 2*(sum((xi-xbar)*(yi-ybar))/((xi-xbar)^2-(yi-ybar)^2))
-        top_sum = 0
-        bot_sum = 0
-        for i in range(X):
-            x = boundary_points[i][0]
-            y = boundary_points[i][1]
-            top_sum += (x-x_bar)*(y-y_bar) # sum((xi-xbar)*(yi-ybar)
-            bot_sum += ((x-x_bar)**2-(y-y_bar)**2) # (xi-xbar)^2-(yi-ybar)^2)
-        angle = (NP.arctan((2*top_sum)/bot_sum))/2
-        major_upper = [] # list of boundary points upper of major axes
-        major_lower = []
-        minor_upper = []
-        minor_lower = []
-        
-        # initialize max/min distances to the axes
-        major_max = 0
-        major_min = 0
-        minor_max = 0
-        minor_min = 0
-        
-        # initialize furthest point to the axes
-        major_up_point = (0,0) # point on top of major axes that is the furthest away
-        major_low_point = (0,0) # point below major axes that is the furthest away
-        minor_up_point = (0,0) # point to the right of minor axes that is the furthest away
-        minor_low_point = (0,0) # point to the left of minor axes that is the furthest away
-        
-        # classify each boundary point, calculate distance, and record max distances seen so far
-        for i in range(X):
-            x = boundary_points[i][0]
-            y = boundary_points[i][1]
-            V_major = (y-y_bar)-NP.tan(angle)*(x-x_bar)
-            V_minor = (y-y_bar)+self.cot(angle)*(x-x_bar)
-            dist_major = ((x-x_bar)*NP.sin(angle)-(y-y_bar)*NP.cos(angle))**2
-            dist_minor = ((x-x_bar)*NP.cos(angle)+(y-y_bar)*NP.sin(angle))**2
-            if (V_major > 0):
-                major_upper.append(boundary_points[i])
-                if (dist_major > major_max):
-                    major_max = dist_major
-                    major_up_point = boundary_points[i]
-            elif (V_major < 0):
-                major_lower.append(boundary_points[i])
-                if (dist_major > major_min):
-                    major_min = dist_major
-                    major_low_point = boundary_points[i]
-            if (V_minor > 0):
-                minor_upper.append(boundary_points[i])
-                if (dist_minor > minor_max):
-                    minor_max = dist_minor
-                    minor_up_point = boundary_points[i]
-            elif (V_minor < 0):
-                minor_lower.append(boundary_points[i])
-                if (dist_minor > minor_min):
-                    minor_min = dist_minor
-                    minor_low_point = boundary_points[i]
-                    
-        # calculate vertices of the rectangle based on points classified
-        t_lx = (major_up_point[0]*NP.tan(angle)+minor_up_point[0]*self.cot(angle)+minor_up_point[1]-major_up_point[1])/(NP.tan(angle)+self.cot(angle))
-        t_ly = (major_up_point[1]*self.cot(angle)+minor_up_point[1]*NP.tan(angle)+minor_up_point[0]-major_up_point[0])/(NP.tan(angle)+self.cot(angle))
-
-        t_rx = (major_up_point[0]*NP.tan(angle)+minor_low_point[0]*self.cot(angle)+minor_low_point[1]-major_up_point[1])/(NP.tan(angle)+self.cot(angle))
-        t_ry = (major_up_point[1]*self.cot(angle)+minor_low_point[1]*NP.tan(angle)+minor_low_point[0]-major_up_point[0])/(NP.tan(angle)+self.cot(angle))
-
-        b_lx = (major_low_point[0]*NP.tan(angle)+minor_up_point[0]*self.cot(angle)+minor_up_point[1]-major_low_point[1])/(NP.tan(angle)+self.cot(angle))
-        b_ly = (major_low_point[1]*self.cot(angle)+minor_up_point[1]*NP.tan(angle)+minor_up_point[0]-major_low_point[0])/(NP.tan(angle)+self.cot(angle))
-
-        b_rx = (major_low_point[0]*NP.tan(angle)+minor_low_point[0]*self.cot(angle)+minor_low_point[1]-major_low_point[1])/(NP.tan(angle)+self.cot(angle))
-        b_ry = (major_low_point[1]*self.cot(angle)+minor_low_point[1]*NP.tan(angle)+minor_low_point[0]-major_low_point[0])/(NP.tan(angle)+self.cot(angle))
-        
-        # make the vertices into tuples
-        top_left = (t_lx,t_ly)
-        top_right = (t_rx, t_ry)
-        bot_left = (b_lx,b_ly)
-        bot_right = (b_rx,b_ry)
-        
-        # return the list of vertices, top_left twice so that plt could join the sides of the rectangle
-        self.ret_fvector=[top_left,top_right,bot_right,bot_left,top_left]
 
         # Calculate ellipse variance
         perim_coord = NP.transpose(self.perim_coord)
@@ -324,13 +356,6 @@ class ExtractFeatures:
         area = self.area_cell
         perim = self.perim_poly
 
-        # Calculate Ferret diameters (max and min) using vertices of the minimum bounding rectange)
-        d1 = NP.sqrt((top_left[0]-top_right[0])**2 + (top_right[1]-top_left[1])**2)
-        d2 = NP.sqrt((top_left[0]-bot_left[0])**2 + (bot_left[1]-top_left[1])**2)
-        self.ferret_max = max(d1,d2)
-        self.ferret_min = min(d1,d2)
-        print self.ferret_max
-        print props[0].major_axis_length
         # Calculate convex hull perimeter
         cvx_img = props[0].convex_image # Find the pixels that make up the perimeter
         eroded_cvx_img = NDI.binary_erosion(cvx_img)
@@ -340,14 +365,13 @@ class ExtractFeatures:
 
         # Calculate shape factors
         # TODO: create a separate RECT method to compute these
+        if (self.ret_fvector == None):
+            self.rect()
         compactness = NP.sqrt((4*area)/NP.pi)/(self.ferret_max)
         elongation = 1-(self.ferret_min/self.ferret_max) 
         convexity = cvx_perim/perim
         circularity = 4*NP.pi*area/(perim**2)
-        
-        # TODO: remove these
-        extension = area/(NP.pi*ellipse_prop_list[4]*ellipse_prop_list[5]/4.0) #Extension = Area of cell/area of ellipse fit?
-        dispersion = 0 #set to 0 for now
+
 
         # Create shape feature vector
         self.shape_fvector = []
@@ -358,10 +382,7 @@ class ExtractFeatures:
         self.shape_fvector.append(elongation) # # 1 - aspect ratio
         self.shape_fvector.append(convexity) # Ratio of convex hull perimeter to perimeter (from 0 to 1)
         self.shape_fvector.append(circularity) # Ratio of area to perimeter squared (circle = 1, starfish << 1)
-        
-        # TODO: remove these
-        self.shape_fvector.append(extension)
-        self.shape_fvector.append(dispersion)
+
 
         return
 
