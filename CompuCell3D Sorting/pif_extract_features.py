@@ -253,7 +253,10 @@ def TestSingleCellPlot(extractor):
             angle = extractor.ellipse_fvector[5]/(2*NP.pi)*360)
 
     PLT.imshow(fixed_perim, interpolation='nearest', cmap='Greys')
-    PLT.plot(extractor.perim_coord_poly[:,0], extractor.perim_coord_poly[:,1], label='Poly', linewidth=3, color='g')
+    perimeter = conv_distance(extractor.perim_3pv)[0]
+    PLT.xticks([])
+    PLT.yticks([])
+    PLT.plot(extractor.perim_coord_poly[:,0], extractor.perim_coord_poly[:,1], label='Polygon Fit (Perimeter = %.3f um)'%perimeter, linewidth=3, color='g')
 
     ax.add_artist(c)
     c.set_alpha(1)
@@ -268,15 +271,17 @@ def TestSingleCellPlot(extractor):
     e.set_edgecolor('orange')
     e.set_linewidth(3)
     e.set_label('Ellipse')
+    
+    PLT.plot(0,0,color='blue',label='Circle Fit (variance = %.3f)'%extractor.ccm_fvector[5],lw=3)
+    PLT.plot(0,0,color='orange',label='Ellipse Fit (variance = %.3f)'%extractor.ellipse_fvector[8],lw=3)
 
-    PLT.plot(0,0,color='blue',label='Circle (var = %.3f)'%extractor.ccm_fvector[5],lw=3)
-    PLT.plot(0,0,color='orange',label='Ellipse (var = %.3f)'%extractor.ellipse_fvector[8],lw=3)
 
-
-    lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=1, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
-    ax.set_xlim([xlim_min, xlim_max])
-    ax.set_ylim([ylim_min, ylim_max])
-    PLT.savefig(outFolder+pifFileName + '_Fits.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
+    lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=1, mode="expand",borderaxespad=0.2, fancybox=True, shadow=True)
+    ax.set_xlim([xlim_min-10, xlim_max+10])
+    ax.set_ylim([ylim_min-10, ylim_max+10])
+    PLT.xticks([])
+    PLT.yticks([])
+    PLT.savefig(outFolder+pifFileName + '_Fits.png', bbox_extra_artists=(lgd,), bbox_inches='tight',dpi = 400)
 
     # Create spline plot with boundary color based on magnitude and parity of curvature
     fig = PLT.figure(2)
@@ -285,6 +290,8 @@ def TestSingleCellPlot(extractor):
     pcolor = PLT.cm.bwr(knorm)
 
     PLT.imshow(fixed_perim, interpolation='nearest', cmap='Greys')
+    PLT.xticks([])
+    PLT.yticks([])
 
     for i in range(len(U)):
         PLT.plot(OUT[0][i:i+2],OUT[1][i:i+2],color=pcolor[i],linewidth=3)
@@ -303,11 +310,15 @@ def TestSingleCellPlot(extractor):
     PLT.imshow(fixed_perim, interpolation='nearest', cmap='Greys')
 
     for i in range(len(U)):
+        PLT.xticks([])
+        PLT.yticks([])
         PLT.plot(OUT[0][i:i+2],OUT[1][i:i+2],color=pcolor[i],linewidth=3)
 
     ax.set_xlim([xlim_min, xlim_max])
     ax.set_ylim([ylim_min, ylim_max])
 
+    PLT.xticks([])
+    PLT.yticks([])
     PLT.plot(0,0,color='blue',label='Negative Curvature',lw=3)
     PLT.plot(0,0,color='red',label='Positive Curvature',lw=3)
 
@@ -329,13 +340,17 @@ def TestSingleCellPlot(extractor):
     path = Path(verts,codes)
     patch = patches.PathPatch(path, facecolor='none', edgecolor='red', lw=2)
     ax.add_patch(patch)
-    PLT.plot(0,0,color='red',label='Rectangle',lw=3)
-    xlim_rec_min = min(verts[0][0],verts[3][0])-5 # Take the minimum of x coordinates of top_left and bot_left vertices
-    xlim_rec_max = max(verts[1][0],verts[2][0])+5 # Take the maximum of x coordinates of top_right and bot_right vertices
-    ylim_rec_min = min(verts[3][1],verts[2][1])-5 # Take the minimum of y coordinates of bot_left and bot_right vertices
-    ylim_rec_max = max(verts[0][1],verts[1][1])+5 # Take the maximum of y coordinates of top_left and top_right vertices
-    ax.set_xlim([xlim_rec_min-5, xlim_rec_max+5])
-    ax.set_ylim([ylim_rec_min-5, ylim_rec_max+5])
+    length = conv_distance(extractor.ferret_max)[0]
+    width = conv_distance(extractor.ferret_min)[0]
+    PLT.xticks([])
+    PLT.yticks([])
+    PLT.plot(0,0,color='red',label='Rectangle Fit (length = %.3f um, width = %.3f um)'%(length,width),lw=3)
+    xlim_rec_min = min(verts[0][0],verts[3][0],verts[1][0],verts[2][0])-5 # Take the minimum of x coordinates of top_left and bot_left vertices
+    xlim_rec_max = max(verts[1][0],verts[2][0],verts[0][0],verts[3][0])+5 # Take the maximum of x coordinates of top_right and bot_right vertices
+    ylim_rec_min = min(verts[3][1],verts[2][1],verts[0][1],verts[1][1])-5 # Take the minimum of y coordinates of bot_left and bot_right vertices
+    ylim_rec_max = max(verts[0][1],verts[1][1],verts[3][1],verts[2][1])+5 # Take the maximum of y coordinates of top_left and top_right vertices
+    ax.set_xlim([xlim_rec_min, xlim_rec_max])
+    ax.set_ylim([ylim_rec_min, ylim_rec_max])
     lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=1, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
     PLT.savefig(outFolder+pifFileName + '_RectangularFit.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
 

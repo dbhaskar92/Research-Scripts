@@ -10,7 +10,7 @@ function [] = image_segment()
     
 	nfigs = 1;
 
-	test_32(nfigs, 1);
+	test_78(nfigs, 1);
 
 	function [nfigs] = test_1(nfigs, display)
 		MIAPaCa_6 = 'MIAPaCa_6.JPG';
