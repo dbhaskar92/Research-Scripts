@@ -181,37 +181,39 @@ class ExtractFeatures:
         return
 
     def cot(self,angle):
+    
         return 1/NP.tan(angle)
 
     def rect(self):
+    
         '''
-                Calculate minimum bounding rectangle
+                Calculate oriented bounding rectangle
+                Paper: 
         '''
-        boundary_points = self.perim_coord #list of boundary points
+        
+        # list of boundary points
+        boundary_points = self.perim_coord
 
         # size of boundary points list
         X, Y = boundary_points.shape
 
         # compute centroid
-        x_sum = 0
-        y_sum = 0
-        for i in range(X):
-            x = boundary_points[i][0]
-            y = boundary_points[i][1]
-            x_sum += x
-            y_sum += y
-        #x_bar = x_sum/X
-        #y_bar = y_sum/X
+        #x_sum = 0
+        #y_sum = 0
+        #for i in range(X):
+        #    x = boundary_points[i][0]
+        #    y = boundary_points[i][1]
+        #    x_sum += x
+        #    y_sum += y
+        #y_bar = x_sum/X
+        #x_bar = y_sum/X
+        
+        # Alternative centroid computation
         props = skimage.measure.regionprops(self.cell_img)
-
         centroid = props[0].centroid
-        # compute centroid
         x_bar = centroid[0]
         y_bar = centroid[1]
-        #print x_bar_1
-        #print x_bar
-        #print y_bar_1
-        #print y_bar
+
         # compute angle using the formula tan(2*angle) = 2*(sum((xi-xbar)*(yi-ybar))/((xi-xbar)^2-(yi-ybar)^2))
         top_sum = 0
         bot_sum = 0
@@ -288,11 +290,13 @@ class ExtractFeatures:
 
         # return the list of vertices, top_left twice so that plt could join the sides of the rectangle
         self.ret_pvector=[top_left,top_right,bot_right,bot_left,top_left]
+        
         # Calculate Ferret diameters (max and min) using vertices of the minimum bounding rectange)
         d1 = NP.sqrt((top_left[0]-top_right[0])**2 + (top_right[1]-top_left[1])**2)
         d2 = NP.sqrt((top_left[0]-bot_left[0])**2 + (bot_left[1]-top_left[1])**2)
         self.ferret_max = max(d1,d2)
         self.ferret_min = min(d1,d2)
+        
         centroid = (x_bar, y_bar)
         self.ret_fvector = [centroid[0], centroid[1], angle, self.ferret_max, self.ferret_min]
 
@@ -344,7 +348,7 @@ class ExtractFeatures:
         ellipse_prop_list.append(props[0].minor_axis_length)
         ellipse_prop_list.append(props[0].orientation) # In degrees starting from the x-axis
         ellipse_prop_list.append(NP.pi*ellipse_prop_list[4]*ellipse_prop_list[5]/4.0) # Ellipse area
-        ellipse_prop_list.append(2.0*ellipse_prop_list[4]*scipy.special.ellipe(props[0].eccentricity**2)) # Ellipse perimeter, parameter to special.ellipe should be eccentricity**2
+        ellipse_prop_list.append(2.0*ellipse_prop_list[4]*scipy.special.ellipe(props[0].eccentricity**2)) # Ellipse perimeter
         ellipse_prop_list.append(sigma/mu) # Ellipse variance
 
         self.ellipse_fvector = ellipse_prop_list
@@ -364,14 +368,12 @@ class ExtractFeatures:
         _, cvx_perim, _ = perimeter_3pvm.perimeter_3pvm(cvx_perim_img)
 
         # Calculate shape factors
-        # TODO: create a separate RECT method to compute these
         if (self.ret_fvector == None):
             self.rect()
         compactness = NP.sqrt((4*area)/NP.pi)/(self.ferret_max)
         elongation = 1-(self.ferret_min/self.ferret_max) 
         convexity = cvx_perim/perim
         circularity = 4*NP.pi*area/(perim**2)
-
 
         # Create shape feature vector
         self.shape_fvector = []
@@ -382,7 +384,6 @@ class ExtractFeatures:
         self.shape_fvector.append(elongation) # # 1 - aspect ratio
         self.shape_fvector.append(convexity) # Ratio of convex hull perimeter to perimeter (from 0 to 1)
         self.shape_fvector.append(circularity) # Ratio of area to perimeter squared (circle = 1, starfish << 1)
-
 
         return
 
@@ -423,6 +424,7 @@ class ExtractFeatures:
         cell_centre_features.append(sigma/mu) # Circle variance (lower is better)
 
         self.ccm_fvector = cell_centre_features
+        
         return
 
     def moments(self):
@@ -431,6 +433,8 @@ class ExtractFeatures:
         Description: Returns the 7 Hu-moments, Legendre-moment, as well as Zernicke-moment
 
         '''
+        
         props = skimage.measure.regionprops(self.cell_img)
         self.hu_moments = list(props[0].moments_hu)
+        
         return
