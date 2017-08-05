@@ -1,0 +1,98 @@
+<CompuCell3D Revision="20141124" Version="3.7.3">
+
+    <Metadata>
+      <NumberOfProcessors>4</NumberOfProcessors>
+      <DebugOutputFrequency>0</DebugOutputFrequency>
+    </Metadata>
+   
+   <Potts>
+      <!-- Basic properties of CPM (GGH) algorithm -->
+      <Dimensions x="500" y="500" z="1"/>
+      <Steps>2000</Steps>
+      <Temperature>15.0</Temperature>
+      <NeighborOrder>2</NeighborOrder>
+      <Flip2DimRatio>1</Flip2DimRatio>
+      <Boundary_x>Periodic</Boundary_x>
+      <Boundary_y>Periodic</Boundary_y>
+   </Potts>
+   
+   <Plugin Name="CellType">    
+      <!-- Listing all cell types in the simulation -->
+      <CellType TypeId="0" TypeName="Medium"/>
+      <CellType TypeId="1" TypeName="Red"/>     <!-- Display in Red (High Rho = cell contraction) -->
+      <CellType TypeId="2" TypeName="Gray"/>    <!-- Display in Gray (High Rac = protrusion) -->
+   </Plugin>
+   
+   <Plugin Name="SurfaceTracker">
+      <MaxNeighborDistance>2.83</MaxNeighborDistance>
+   </Plugin>
+   
+   <Plugin Name="Volume"/>
+   
+   <Plugin Name="Surface"/>
+   
+   <Plugin Name="ExternalPotential"/>
+
+   <Plugin Name="CenterOfMass">
+      <!-- Module tracking center of mass of each cell -->
+   </Plugin>
+   
+   <Plugin Name="NeighborTracker">
+      <!-- Module tracking neighboring cells of each cell -->
+   </Plugin>
+   
+   <Plugin Name="Contact">
+      <!-- Specification of adhesion energies -->
+      <Energy Type1="Medium" Type2="Medium">0.0</Energy>
+      
+      <Energy Type1="Medium" Type2="Red">80.0</Energy>
+      <Energy Type1="Medium" Type2="Gray">80.0</Energy>
+      
+      <Energy Type1="Red" Type2="Red">60.0</Energy>
+      <Energy Type1="Gray" Type2="Red">60.0</Energy>
+      <Energy Type1="Gray" Type2="Gray">60.0</Energy>
+      
+      <Depth>1.4</Depth>
+   </Plugin>
+   
+   <Plugin Name="Connectivity">
+      <Penalty Type="Green">1000000</Penalty>
+      <Penalty Type="Red">1000000</Penalty>
+      <Penalty Type="Gray">1000000</Penalty>
+   </Plugin>
+   
+   <!--
+   <Steppable Type="BlobInitializer">
+    <Region>
+        <Gap>0</Gap>
+        <Width>20</Width>
+        <Radius>220</Radius>
+        <Center x="240" y="240" z="0"/>
+        <Types>Gray</Types>
+    </Region>
+   </Steppable>
+   -->
+   
+   <!--
+    <Steppable Type="UniformInitializer">
+      <Region>
+        <BoxMin x="20" y="20" z="0" />
+            <BoxMax x="380" y="380" z="1" />
+            <Gap>0</Gap>
+            <Width>20</Width>
+            <Types>Gray</Types>
+      </Region>
+   </Steppable>
+   -->
+   
+   <Steppable Type="PIFInitializer">
+      <PIFName>Simulation/big_cluster.pif</PIFName>
+   </Steppable>
+   
+   <!--
+   <Steppable Type="PIFDumper" Frequency="10">
+    <PIFName>/home/dbhaskar92/Downloads/frame</PIFName>
+   </Steppable>
+   -->
+   
+</CompuCell3D>

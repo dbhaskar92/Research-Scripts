@@ -1,0 +1,175 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<sbml xmlns="http://www.sbml.org/sbml/level2" level="2" version="1">
+  <model id="cell">
+    <listOfCompartments>
+      <compartment size="1" id="compartment"/>
+    </listOfCompartments>
+    <listOfSpecies>
+      <species compartment="compartment" boundaryCondition="false" id="G" initialConcentration="0"/>
+      <species compartment="compartment" boundaryCondition="true" id="Gavg" initialConcentration="0"/>
+      <species compartment="compartment" boundaryCondition="false" id="A" initialConcentration="400"/>
+      <species compartment="compartment" boundaryCondition="false" id="At" initialConcentration="400"/>
+      <species compartment="compartment" boundaryCondition="false" id="beta" initialConcentration="0.2"/>
+      <species compartment="compartment" boundaryCondition="true" id="X" initialConcentration="0"/>
+    </listOfSpecies>
+    <listOfParameters>
+      <parameter value="2000" id="alpha"/>
+      <parameter value="0.1" id="b"/>
+      <parameter value="1.5" id="gamma"/>
+      <parameter value="4" id="n"/>
+      <parameter value="10" id="m"/>
+      <parameter value="2" id="Gtot"/>
+      <parameter value="0.1" id="eps"/>
+      <parameter value="600" id="Ab"/>
+      <parameter value="0.75" id="phi"/>
+      <parameter value="0.3" id="Gh"/>
+    </listOfParameters>
+    <listOfReactions>
+      <reaction id="_J1" reversible="false">
+        <listOfReactants>
+          <speciesReference species="X" stoichiometry="1"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="G" stoichiometry="1"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">          
+            <apply>
+              <times/>
+              <ci> alpha </ci>
+              <apply>
+                <minus/>
+                <apply>
+                  <times/>
+                  <apply>
+                    <plus/>
+                    <apply>
+                      <plus/>
+                      <ci> b </ci>
+                      <apply>
+                        <times/>
+                        <ci> beta </ci>
+                        <apply>
+                          <divide/>
+                          <apply>
+                            <power/>
+                            <ci> A </ci>
+                            <ci> m </ci>
+                          </apply>
+                          <apply>
+                            <plus/>
+                            <apply>
+                              <power/>
+                              <ci> At </ci>
+                              <ci> m </ci>
+                            </apply>
+                            <apply>
+                              <power/>
+                              <ci> A </ci>
+                              <ci> m </ci>
+                            </apply>
+                          </apply>
+                        </apply>
+                      </apply>
+                    </apply>
+                    <apply>
+                      <divide/>
+                      <apply>
+                        <times/>
+                        <ci> gamma </ci>
+                        <apply>
+                          <power/>
+                          <ci> G </ci>
+                          <ci> n </ci>
+                        </apply>
+                      </apply>
+                      <apply>
+                        <plus/>
+                        <cn type="integer"> 1 </cn>
+                        <apply>
+                          <power/>
+                          <ci> G </ci>
+                          <ci> n </ci>
+                        </apply>
+                      </apply>
+                    </apply>
+                  </apply>
+                  <apply>
+                    <minus/>
+                    <ci> Gtot </ci>
+                    <ci> G </ci>
+                  </apply>
+                </apply>
+                <ci> G </ci>
+              </apply>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="_J2" reversible="false">
+        <listOfReactants>
+          <speciesReference species="X" stoichiometry="1"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="At" stoichiometry="1"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">          
+            <apply>
+              <times/>
+              <apply>
+                <times/>
+                <apply>
+                  <times/>
+                  <apply>
+                    <minus/>
+                    <cn type="integer"> 1 </cn>
+                  </apply>
+                  <ci> alpha </ci>
+                </apply>
+                <ci> eps </ci>
+              </apply>
+              <apply>
+                <minus/>
+                <ci> At </ci>
+                <apply>
+                  <times/>
+                  <ci> Ab </ci>
+                  <apply>
+                    <minus/>
+                    <cn type="integer"> 1 </cn>
+                    <apply>
+                      <divide/>
+                      <apply>
+                        <times/>
+                        <ci> phi </ci>
+                        <apply>
+                          <power/>
+                          <ci> G </ci>
+                          <ci> n </ci>
+                        </apply>
+                      </apply>
+                      <apply>
+                        <plus/>
+                        <apply>
+                          <power/>
+                          <ci> Gh </ci>
+                          <ci> n </ci>
+                        </apply>
+                        <apply>
+                          <power/>
+                          <ci> G </ci>
+                          <ci> n </ci>
+                        </apply>
+                      </apply>
+                    </apply>
+                  </apply>
+                </apply>
+              </apply>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+    </listOfReactions>
+  </model>
+</sbml>
