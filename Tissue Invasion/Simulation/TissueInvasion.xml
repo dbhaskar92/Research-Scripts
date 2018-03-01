@@ -1,0 +1,57 @@
+<CompuCell3D Revision="20141124" Version="3.7.3">
+   
+   <Potts>
+      <!-- Basic properties of CPM (GGH) algorithm -->
+      <Dimensions x="201" y="350" z="1"/>
+      <Steps>1000</Steps>
+      <Temperature>10.0</Temperature>
+      <NeighborOrder>2</NeighborOrder>
+      <Boundary_x>Periodic</Boundary_x>
+   </Potts>
+   
+   <Plugin Name="CellType">
+      
+      <!-- Listing all cell types in the simulation -->
+      <CellType TypeId="0" TypeName="Medium"/>
+      <CellType TypeId="1" TypeName="MCFpIRES"/>  <!-- Green -->
+      <CellType TypeId="2" TypeName="MCFmPodo"/>  <!-- Red   -->
+   </Plugin>
+   
+   <Plugin Name="Volume"/>
+   
+   <Plugin Name="Surface"/>
+   
+   <Plugin Name="ExternalPotential"/>
+
+   <Plugin Name="CenterOfMass">
+      <!-- Module tracking center of mass of each cell -->
+   </Plugin>
+   
+   <Plugin Name="NeighborTracker">
+      <!-- Module tracking neighboring cells of each cell -->
+   </Plugin>
+   
+   <Plugin Name="Contact">
+      <!-- Specification of adhesion energies -->
+      <Energy Type1="Medium" Type2="Medium">0.0</Energy>
+      
+      <Energy Type1="Medium" Type2="MCFpIRES">10.0</Energy>
+      <Energy Type1="Medium" Type2="MCFmPodo">5.0</Energy>
+      
+      <Energy Type1="MCFpIRES" Type2="MCFpIRES">5.0</Energy>
+      <Energy Type1="MCFpIRES" Type2="MCFmPodo">8.0</Energy>
+      <Energy Type1="MCFmPodo" Type2="MCFmPodo">10.0</Energy>
+      <NeighborOrder>2</NeighborOrder>
+   </Plugin>
+   
+   <Plugin Name="Connectivity">
+      <!-- Connectivity constraint applied to each cell. Energy penalty is specified globally for each cell -->
+      <Penalty>10000000</Penalty>
+   </Plugin>
+   
+   <Steppable Type="PIFInitializer">     
+      <!-- Initial layout of cells using PIFF file. Piff files can be generated using PIFGEnerator -->
+      <PIFName>Simulation/celllattice.piff</PIFName>
+   </Steppable>
+   
+</CompuCell3D>

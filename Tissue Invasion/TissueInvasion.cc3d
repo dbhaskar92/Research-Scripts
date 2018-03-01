@@ -1,0 +1,6 @@
+<Simulation version="3.6.2">
+   <XMLScript Type="XMLScript">Simulation/TissueInvasion.xml</XMLScript>
+   <PythonScript Type="PythonScript">Simulation/TissueInvasion.py</PythonScript>
+   <Resource Type="Python">Simulation/TissueInvasionSteppables.py</Resource>
+   <PIFFile>Simulation/celllattice.piff</PIFFile>
+</Simulation>

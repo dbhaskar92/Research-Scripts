@@ -20,7 +20,7 @@ int main(){
 	int leaders[numleaders];
 	int width = 40;			// Default: 40
 	int height = 10;		// Default: 10
-	int cellsize = 20;		// Default: 20
+	int cellsize = 20;		// Default: 5
 
 	int y_max = cellsize*height - cellsize;
 	int x_max = cellsize*width - cellsize;
@@ -52,7 +52,7 @@ int main(){
 	}
 	printf("\n\n");
 
-	// generate pif output
+	// generate piff output
 
 	for(j=0; j<=y_max; j=j+cellsize){
 		for(i=0; i<=x_max; i=i+cellsize){	
