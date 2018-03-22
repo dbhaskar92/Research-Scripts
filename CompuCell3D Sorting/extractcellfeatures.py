@@ -1,8 +1,10 @@
 #
-# Last modified: 19 May 2016
+# Last modified: 21 Mar 2018
 # Authors: Darrick Lee <y.l.darrick@gmail.com>, Dhananjay Bhaskar <dbhaskar92@gmail.com>, MoHan Zhang <mohan_z2hotmail.com>
 # Description: Compute features from list of pixels representing a Cellular Potts Model (CPM) cell
 #
+
+from __future__ import division
 
 import numpy as NP
 import scipy.special
@@ -340,15 +342,20 @@ class ExtractFeatures:
         d = NP.sqrt(V[0]*cV[0] + V[1]*cV[1])
         mu = NP.sum(d)/numPt
         sigma = NP.sqrt(NP.sum((d-mu)**2)/numPt)
-
+        
+        major_axis_len = props[0].major_axis_length
+        minor_axis_len = props[0].minor_axis_length
+        semi_major_len = major_axis_len/2.0
+        semi_minor_len = minor_axis_len/2.0
+        ecc = NP.sqrt(1-((semi_minor_len)**2/(semi_major_len**2)))
         ellipse_prop_list = [centroid[0]]
         ellipse_prop_list.append(centroid[1])
-        ellipse_prop_list.append(props[0].eccentricity)
-        ellipse_prop_list.append(props[0].major_axis_length)
-        ellipse_prop_list.append(props[0].minor_axis_length)
+        ellipse_prop_list.append(ecc)
+        ellipse_prop_list.append(major_axis_len)
+        ellipse_prop_list.append(minor_axis_len)
         ellipse_prop_list.append(props[0].orientation) # In degrees starting from the x-axis
-        ellipse_prop_list.append(NP.pi*ellipse_prop_list[4]*ellipse_prop_list[5]/4.0) # Ellipse area
-        ellipse_prop_list.append(2.0*ellipse_prop_list[4]*scipy.special.ellipe(props[0].eccentricity**2)) # Ellipse perimeter
+        ellipse_prop_list.append(NP.pi*semi_major_len*semi_minor_len) # Ellipse area
+        ellipse_prop_list.append(4.0*semi_major_len*scipy.special.ellipe(ecc)) # Ellipse perimeter
         ellipse_prop_list.append(sigma/mu) # Ellipse variance
 
         self.ellipse_fvector = ellipse_prop_list
@@ -408,9 +415,31 @@ class ExtractFeatures:
             (xc, yc, r) = c_model._params
         else:									# For newer versions
             (xc, yc, r) = c_model.params
+            
+        perim_coord = NP.transpose(self.perim_coord)
+        x = perim_coord[0]
+        y = perim_coord[1]
+        x_m = NP.mean(x)
+        y_m = NP.mean(y)
+        
+        u = x - x_m
+        v = y - y_m
+        Suv = sum(u*v)
+        Suu = sum(u**2)
+        Svv = sum(v**2)
+        Suuv = sum(u**2 * v)
+        Suvv = sum(u * v**2)
+        Suuu = sum(u**3)
+        Svvv = sum(v**3)
+        A = NP.array([ [ Suu, Suv ], [Suv, Svv]])
+        B = NP.array([ Suuu + Suvv, Svvv + Suuv ])/2.0
+        uc, vc = NP.linalg.solve(A, B)
+        xc = x_m + uc
+        yc = y_m + vc
+        Ri = NP.sqrt((x-xc)**2 + (y-yc)**2)
+        r = NP.mean(Ri)
 
         # Calculate the circle variance
-        perim_coord = NP.transpose(self.perim_coord)
         numPt = len(perim_coord[0])
         d = NP.sqrt((perim_coord[0]-xc)**2 + (perim_coord[1]-yc)**2)
         mu = NP.sum(d)/numPt

@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 
 #
-# Last modified: 3 March 2017
+# Last modified: 21 March 2018
 # Author: Darrick Lee <y.l.darrick@gmail.com>, Dhananjay Bhaskar <dbhaskar92@gmail.com>, MoHan Zhang <mohan_z@hotmail.com>
 # Extract cell shape features from PIF file
 # 
+
+from __future__ import division
 
 import os
 import sys
@@ -223,16 +225,18 @@ def TestSingleCellPlot(extractor):
     extractor.basic_props(splineSmooth)
     extractor.shape_props()
     extractor.cell_centre_fit()
+    
+    padding = 5
 
     fixed_perim = NP.transpose(extractor.perim_img)
 
     perim_img_ind = NP.where(fixed_perim == 1)
 
-    xlim_min = min(perim_img_ind[1])-5
-    xlim_max = max(perim_img_ind[1])+5
+    xlim_min = min(perim_img_ind[1]) - padding
+    xlim_max = max(perim_img_ind[1]) + padding
 
-    ylim_min = min(perim_img_ind[0])-5
-    ylim_max = max(perim_img_ind[0])+5
+    ylim_min = min(perim_img_ind[0]) - padding
+    ylim_max = max(perim_img_ind[0]) + padding
 
     U = extractor.spl_u
     OUT = interpolate.splev(U, extractor.spl_poly)
@@ -241,10 +245,15 @@ def TestSingleCellPlot(extractor):
     fig = PLT.figure(1)
     ax = fig.add_subplot(111, aspect='equal')
 
-    # Create cirlce plot
+    # Create circle plot
     c = PLT.Circle((extractor.ccm_fvector[0],
             extractor.ccm_fvector[1]),
             extractor.ccm_fvector[2])
+            
+    xlim_min = min(xlim_min, extractor.ccm_fvector[0] - extractor.ccm_fvector[2] - padding)
+    xlim_max = max(xlim_max, extractor.ccm_fvector[0] + extractor.ccm_fvector[2] + padding)
+    ylim_min = min(ylim_min, extractor.ccm_fvector[1] - extractor.ccm_fvector[2] - padding)
+    ylim_max = max(ylim_max, extractor.ccm_fvector[1] + extractor.ccm_fvector[2] + padding)
 
     # Create ellipse plot
     e = Ellipse(xy=NP.array([extractor.ellipse_fvector[0], extractor.ellipse_fvector[1]]),
