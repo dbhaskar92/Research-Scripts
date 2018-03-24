@@ -22,6 +22,8 @@ import extractcellfeatures
 
 import numpy as NP
 import lxml.etree as ET
+
+import matplotlib
 import matplotlib.pyplot as PLT
 import matplotlib.patches as patches
 
@@ -143,7 +145,7 @@ if separate:
         sys.exit(1)
 
 else:
-    circleOut = ellipseOut = splineOut = polyOut = boundaryOut = vectorizeOut = outFolder
+    circleOut = ellipseOut = splineOut = splineBdyOut = polyOut = boundaryOut = vectorizeOut = outFolder
 
 ## PARSE PIF FILE #############################################################
 
@@ -226,20 +228,21 @@ def TestSingleCellPlot(extractor):
     extractor.shape_props()
     extractor.cell_centre_fit()
     
-    padding = 5
+    padding = 10
 
     fixed_perim = NP.transpose(extractor.perim_img)
 
     perim_img_ind = NP.where(fixed_perim == 1)
 
-    xlim_min = min(perim_img_ind[1]) - padding
-    xlim_max = max(perim_img_ind[1]) + padding
+    xlim_min = min(perim_img_ind[1])
+    xlim_max = max(perim_img_ind[1])
 
-    ylim_min = min(perim_img_ind[0]) - padding
-    ylim_max = max(perim_img_ind[0]) + padding
+    ylim_min = min(perim_img_ind[0])
+    ylim_max = max(perim_img_ind[0])
 
     U = extractor.spl_u
     OUT = interpolate.splev(U, extractor.spl_poly)
+    BDY_FEATS = extractor.bdy_fvector
 
     # Create Circle/Ellipse plot
     fig = PLT.figure(1)
@@ -250,10 +253,10 @@ def TestSingleCellPlot(extractor):
             extractor.ccm_fvector[1]),
             extractor.ccm_fvector[2])
             
-    xlim_min = min(xlim_min, extractor.ccm_fvector[0] - extractor.ccm_fvector[2] - padding)
-    xlim_max = max(xlim_max, extractor.ccm_fvector[0] + extractor.ccm_fvector[2] + padding)
-    ylim_min = min(ylim_min, extractor.ccm_fvector[1] - extractor.ccm_fvector[2] - padding)
-    ylim_max = max(ylim_max, extractor.ccm_fvector[1] + extractor.ccm_fvector[2] + padding)
+    xlim_min = min(xlim_min, extractor.ccm_fvector[0] - extractor.ccm_fvector[2])
+    xlim_max = max(xlim_max, extractor.ccm_fvector[0] + extractor.ccm_fvector[2])
+    ylim_min = min(ylim_min, extractor.ccm_fvector[1] - extractor.ccm_fvector[2])
+    ylim_max = max(ylim_max, extractor.ccm_fvector[1] + extractor.ccm_fvector[2])
 
     # Create ellipse plot
     e = Ellipse(xy=NP.array([extractor.ellipse_fvector[0], extractor.ellipse_fvector[1]]),
@@ -261,11 +264,31 @@ def TestSingleCellPlot(extractor):
             height = extractor.ellipse_fvector[3],
             angle = extractor.ellipse_fvector[5]/(2*NP.pi)*360)
 
+    # Compute horizontal width and height of the oriented ellipse
+    a = extractor.ellipse_fvector[4]/2.0
+    b = extractor.ellipse_fvector[3]/2.0
+    alpha = extractor.ellipse_fvector[5]
+    x_c = extractor.ellipse_fvector[0]
+    y_c = extractor.ellipse_fvector[1]
+    x_b = 0
+    y_b = 0
+    if a > b:
+        x_b = abs(a * math.cos(alpha))
+        y_b = abs(a * math.cos(alpha))
+    else:
+        x_b = abs(b * math.sin(alpha))
+        y_b = abs(b * math.cos(alpha))
+        
+    xlim_min = min(xlim_min, x_c - x_b)
+    xlim_max = max(xlim_max, x_c + x_b)
+    ylim_min = min(ylim_min, y_c - y_b)
+    ylim_max = max(ylim_max, y_c + y_b)
+
     PLT.imshow(fixed_perim, interpolation='nearest', cmap='Greys')
     perimeter = conv_distance(extractor.perim_3pv)[0]
     PLT.xticks([])
     PLT.yticks([])
-    PLT.plot(extractor.perim_coord_poly[:,0], extractor.perim_coord_poly[:,1], label='Polygon Fit (Perimeter = %.3f um)'%perimeter, linewidth=3, color='g')
+    PLT.plot(extractor.perim_coord_poly[:,0], extractor.perim_coord_poly[:,1], label='Polygon Fit (Perimeter = %.2f um)'%perimeter, color='g', lw=2)
 
     ax.add_artist(c)
     c.set_alpha(1)
@@ -281,37 +304,70 @@ def TestSingleCellPlot(extractor):
     e.set_linewidth(3)
     e.set_label('Ellipse')
     
-    PLT.plot(0,0,color='blue',label='Circle Fit (variance = %.3f)'%extractor.ccm_fvector[5],lw=3)
-    PLT.plot(0,0,color='orange',label='Ellipse Fit (variance = %.3f)'%extractor.ellipse_fvector[8],lw=3)
+    PLT.plot(0, 0, color='blue', label='Circle Fit (Variance = %.2f)'%extractor.ccm_fvector[5], lw=2)
+    PLT.plot(0, 0, color='orange', label='Ellipse Fit (Variance = %.2f)'%extractor.ellipse_fvector[8], lw=2)
 
-
-    lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=1, mode="expand",borderaxespad=0.2, fancybox=True, shadow=True)
-    ax.set_xlim([xlim_min-10, xlim_max+10])
-    ax.set_ylim([ylim_min-10, ylim_max+10])
+    lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=1, mode=None, fontsize="small", borderaxespad=0.2, fancybox=True, shadow=True)
+    
+    ax.set_xlim([xlim_min - padding, xlim_max + padding])
+    ax.set_ylim([ylim_min - padding, ylim_max + padding])
+    
     PLT.xticks([])
     PLT.yticks([])
-    PLT.savefig(outFolder+pifFileName + '_Fits.png', bbox_extra_artists=(lgd,), bbox_inches='tight',dpi = 400)
+    
+    PLT.savefig(outFolder + pifFileName + '_Fits.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
 
     # Create spline plot with boundary color based on magnitude and parity of curvature
-    fig = PLT.figure(2)
-    ax = fig.add_subplot(111, aspect='equal')
+    fig, (ax1, ax2) = PLT.subplots(1, 2, gridspec_kw = {'width_ratios':[1,10]})
     knorm = expit(extractor.spl_k/max(abs(extractor.spl_k))*10)
-    pcolor = PLT.cm.bwr(knorm)
-
-    PLT.imshow(fixed_perim, interpolation='nearest', cmap='Greys')
-    PLT.xticks([])
-    PLT.yticks([])
+    
+    norm = matplotlib.colors.Normalize(vmin=NP.min(extractor.spl_k), vmax=NP.max(extractor.spl_k))
+    cb = matplotlib.colorbar.ColorbarBase(ax1, cmap=matplotlib.cm.coolwarm, norm=norm, orientation='vertical')
+    cb.set_label('Magnitude of Curvature', labelpad=-100)
+    
+    pcolor = PLT.cm.coolwarm(knorm)
 
     for i in range(len(U)):
-        PLT.plot(OUT[0][i:i+2],OUT[1][i:i+2],color=pcolor[i],linewidth=3)
+        ax2.plot(OUT[0][i:i+2], OUT[1][i:i+2], color=pcolor[i], linewidth=2)
 
-    ax.set_xlim([xlim_min, xlim_max])
-    ax.set_ylim([ylim_min, ylim_max])
+    xlim_min = min(perim_img_ind[1])
+    xlim_max = max(perim_img_ind[1])
+    ylim_min = min(perim_img_ind[0])
+    ylim_max = max(perim_img_ind[0])
+    
+    PLT.xticks([])
+    PLT.yticks([])
+    ax2.set_aspect(1)
+    ax2.set_xlim([xlim_min - padding, xlim_max + padding])
+    ax2.set_ylim([ylim_min - padding, ylim_max + padding])
 
-    PLT.savefig(outFolder+pifFileName + '_SplineCurvature.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
+    k_protrusions = BDY_FEATS[2]
+    k_indentations = BDY_FEATS[3]
+    PLT.gcf().text(0.01, 1.02, "Number of Protrusions: %d"%k_protrusions, fontsize=11)
+    PLT.gcf().text(0.01, 0.99, "Number of Indentations: %d"%k_indentations, fontsize=11)
+    PLT.savefig(outFolder + pifFileName + '_SplineCurvature.png', bbox_inches='tight', dpi = 400)
+    
+    # Plot curvature function
+    min_idx = NP.argmin(NP.absolute(extractor.spl_k))
+    spl_k_shifted = NP.roll(extractor.spl_k, min_idx)
+    x_data = range(0, len(extractor.spl_k))
+    tick_data = NP.roll(x_data, min_idx) 
+    
+    fig, (ax1, ax2) = PLT.subplots(1, 2, gridspec_kw = {'width_ratios':[6,4]})
+     
+    ax1.set_xticks(x_data[0:-1:50])
+    ax1.set_xticklabels(tick_data[0:-1:50])
+    ax1.plot(x_data, spl_k_shifted)
+    ax1.set_xlabel('Spline Parameterization Index')
+    ax1.set_ylabel('Curvature')
+    
+    ax2.boxplot(extractor.spl_k)
+    ax2.set_xticks([])
+    
+    PLT.savefig(outFolder + pifFileName + '_CurvatureFcn.png', bbox_inches='tight', dpi = 400)
 
     # Create spline plot with a binary boundary color scheme based on parity of curvature
-    fig = PLT.figure(3)
+    fig = PLT.figure(4)
     ax = fig.add_subplot(111, aspect='equal')
     knorm = NP.sign(extractor.spl_k)/2 + 0.5
     pcolor = PLT.cm.bwr(knorm)
@@ -321,22 +377,22 @@ def TestSingleCellPlot(extractor):
     for i in range(len(U)):
         PLT.xticks([])
         PLT.yticks([])
-        PLT.plot(OUT[0][i:i+2],OUT[1][i:i+2],color=pcolor[i],linewidth=3)
+        PLT.plot(OUT[0][i:i+2], OUT[1][i:i+2], color=pcolor[i], linewidth=2)
 
-    ax.set_xlim([xlim_min, xlim_max])
-    ax.set_ylim([ylim_min, ylim_max])
+    ax.set_xlim([xlim_min - padding, xlim_max + padding])
+    ax.set_ylim([ylim_min - padding, ylim_max + padding])
 
     PLT.xticks([])
     PLT.yticks([])
-    PLT.plot(0,0,color='blue',label='Negative Curvature',lw=3)
-    PLT.plot(0,0,color='red',label='Positive Curvature',lw=3)
+    
+    PLT.plot(0, 0, color='blue', label='Negative Curvature', lw=2)
+    PLT.plot(0, 0, color='red', label='Positive Curvature', lw=2)
 
-    lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=2, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
-
-    PLT.savefig(outFolder+pifFileName + '_SplineCurvatureBin.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
+    lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=2, mode=None, fontsize="small", borderaxespad=0.2, fancybox=True, shadow=True)
+    PLT.savefig(outFolder + pifFileName + '_SplineCurvatureBin.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi=400)
 
     # Create oriented bounding rectangle plot
-    fig = PLT.figure(4)
+    fig = PLT.figure(5)
     ax = fig.add_subplot(111, aspect='equal')
     PLT.imshow(fixed_perim, interpolation='nearest', cmap='Greys')
     verts = extractor.ret_pvector
@@ -353,15 +409,18 @@ def TestSingleCellPlot(extractor):
     width = conv_distance(extractor.ferret_min)[0]
     PLT.xticks([])
     PLT.yticks([])
-    PLT.plot(0,0,color='red',label='Rectangle Fit (length = %.3f um, width = %.3f um)'%(length,width),lw=3)
-    xlim_rec_min = min(verts[0][0],verts[3][0],verts[1][0],verts[2][0])-5 # Take the minimum of x coordinates of top_left and bot_left vertices
-    xlim_rec_max = max(verts[1][0],verts[2][0],verts[0][0],verts[3][0])+5 # Take the maximum of x coordinates of top_right and bot_right vertices
-    ylim_rec_min = min(verts[3][1],verts[2][1],verts[0][1],verts[1][1])-5 # Take the minimum of y coordinates of bot_left and bot_right vertices
-    ylim_rec_max = max(verts[0][1],verts[1][1],verts[3][1],verts[2][1])+5 # Take the maximum of y coordinates of top_left and top_right vertices
+    PLT.plot(0, 0, color='red', label='Rectangle Fit (Length = %.2f um, Width = %.2f um)'%(length,width), lw=2)
+    
+    xlim_rec_min = min(verts[0][0], verts[3][0], verts[1][0], verts[2][0]) - padding
+    xlim_rec_max = max(verts[1][0], verts[2][0], verts[0][0], verts[3][0]) + padding 
+    ylim_rec_min = min(verts[3][1], verts[2][1], verts[0][1], verts[1][1]) - padding 
+    ylim_rec_max = max(verts[0][1], verts[1][1], verts[3][1], verts[2][1]) + padding
+    
     ax.set_xlim([xlim_rec_min, xlim_rec_max])
     ax.set_ylim([ylim_rec_min, ylim_rec_max])
-    lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=1, mode="expand", borderaxespad=0.2, fancybox=True, shadow=True)
-    PLT.savefig(outFolder+pifFileName + '_RectangularFit.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi = 400)
+    
+    lgd = PLT.legend(bbox_to_anchor=(0.0, 1.1, 1.0, 1.5), loc=3, ncol=1, mode=None, fontsize="small", borderaxespad=0.2, fancybox=True, shadow=True)
+    PLT.savefig(outFolder + pifFileName + '_RectangularFit.png', bbox_extra_artists=(lgd,), bbox_inches='tight', dpi=400)
 
 
 ## COMPUTE FEATURES FOR ALL CELLS #############################################
@@ -495,12 +554,12 @@ featIndexDict['ERODED'] = dict(
 )
     
 featIndexDict['BDY'] = dict(
-    maxpos=BDY_start,
-    minpos=BDY_start+1,
-    maxneg=BDY_start+2,
-    minneg=BDY_start+3,
-    num_extrema=BDY_start+4,
-    num_signflip=BDY_start+5
+    mean=BDY_start,
+    std_dev=BDY_start+1,
+    protrusions=BDY_start+2,
+    indentations=BDY_start+3,
+    global_max=BDY_start+4,
+    global_min=BDY_start+5
 )
     
 featIndexDict['SHAPE'] = dict(
@@ -585,6 +644,9 @@ if plotfits:
     else:
         ax.set_xlim([0,l_height])
         ax.set_ylim([0,l_width])
+    
+    PLT.xticks(rotation=90)
+    PLT.yticks(rotation=90)
     PLT.savefig(ellipseOut + pifFileName + '_EllipseFit.png', bbox_inches='tight', dpi = imgDPI)
 
     # Plot cell-centre model (disk fit)
@@ -616,6 +678,9 @@ if plotfits:
     else:
         ax.set_xlim([0,l_height])
         ax.set_ylim([0,l_width])
+        
+    PLT.xticks(rotation=90)
+    PLT.yticks(rotation=90)
     PLT.savefig(circleOut + pifFileName + '_CircleFit.png', bbox_inches='tight', dpi = imgDPI)
 
     # Plot 3pv-polygon model
@@ -644,6 +709,9 @@ if plotfits:
     else:
         ax.set_xlim([0,l_height])
         ax.set_ylim([0,l_width])
+        
+    PLT.xticks(rotation=90)
+    PLT.yticks(rotation=90)
     PLT.savefig(polyOut + pifFileName + '_PolyFit.png', bbox_inches='tight', dpi = imgDPI)
 
     # Plot spline model
@@ -672,6 +740,9 @@ if plotfits:
     else:
         ax.set_xlim([0,l_height])
         ax.set_ylim([0,l_width])
+        
+    PLT.xticks(rotation=90)
+    PLT.yticks(rotation=90)
     PLT.savefig(splineOut + pifFileName + '_SplineFit.png', bbox_inches='tight', dpi = imgDPI)
 
     # Plot Rectangular Fits
@@ -707,6 +778,9 @@ if plotfits:
     else:
         ax.set_xlim([0,l_height])
         ax.set_ylim([0,l_width])
+        
+    PLT.xticks(rotation=90)
+    PLT.yticks(rotation=90)
     PLT.savefig(splineOut + pifFileName + '_RectangularFit.png', bbox_inches='tight', dpi = imgDPI)
 
     # Plot spline model with curvature dependent boundary
@@ -747,6 +821,9 @@ if plotfits:
         else:
             ax.set_xlim([0,l_height])
             ax.set_ylim([0,l_width])
+            
+        PLT.xticks(rotation=90)
+        PLT.yticks(rotation=90)
         PLT.savefig(splineBdyOut + pifFileName + '_SplineBdyFit.png', bbox_inches='tight', dpi = imgDPI)
 
     if sp is not None:
@@ -968,7 +1045,7 @@ if createcsv:
     featNamesOrig = featNamesOrig + ['ELLIPSE_eccentricity', 'ELLIPSE_major_axis_length', 'ELLIPSE_minor_axis_length', 'ELLIPSE_orientation', 'ELLIPSE_area', 'ELLIPSE_perimeter', 'ELLIPSE_variance']
     featNamesOrig = featNamesOrig + ['CCM_radius', 'CCM_perimeter', 'CCM_area', 'CCM_variance']
     featNamesOrig = featNamesOrig + ['ERODED_perimeter', 'ERODED_area']
-    featNamesOrig = featNamesOrig + ['BDY_maxpos', 'BDY_minpos', 'BDY_maxneg', 'BDY_minneg', 'BDY_num_extrema', 'BDY_signflip']
+    featNamesOrig = featNamesOrig + ['BDY_mean', 'BDY_std_dev', 'BDY_protrusions', 'BDY_indentations', 'BDY_global_max', 'BDY_global_min']
     featNamesOrig = featNamesOrig + ['RECT_orientation', 'RECT_major_axis_length', 'RECT_minor_axis_length']
 
     numFeat = len(featNamesOrig)    

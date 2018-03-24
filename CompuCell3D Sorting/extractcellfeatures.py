@@ -16,6 +16,7 @@ import matplotlib.pyplot as PLT
 from operator import itemgetter
 from scipy import interpolate
 from scipy import ndimage as NDI
+from detect_peaks import detect_peaks
 from scipy.signal import argrelextrema
 
 class ExtractFeatures:
@@ -118,8 +119,8 @@ class ExtractFeatures:
         self.perim_coord_dp = skimage.measure.approximate_polygon(NP.array(self.perim_coord_poly), 0.75)
 
         # Create cubic spline
-        self.spl_poly, _ = interpolate.splprep(NP.transpose(self.perim_coord_poly), per=1,s=splineSmooth)
-        self.spl_u = NP.linspace(0,1.0,100)
+        self.spl_poly, _ = interpolate.splprep(NP.transpose(self.perim_coord_poly), per=1) # s=splineSmooth
+        self.spl_u = NP.linspace(0, 1.0, 500)
 
         # Calculate spline curvature
         D1 = interpolate.splev(self.spl_u, self.spl_poly, der=1)
@@ -127,33 +128,22 @@ class ExtractFeatures:
         self.spl_k = (D1[0]*D2[1] - D1[1]*D2[0])/((D1[0]**2+D1[1]**2)**(3./2))
 
         # Calculate boundary features
-        ksign = NP.sign(self.spl_k)
-        signchange = ((NP.roll(ksign, 1) - ksign) != 0).astype(int)
-        num_signchange = sum(signchange)
+        mean_curvature = NP.mean(self.spl_k)
+        std_dev_curvature = NP.std(self.spl_k)
+        
+        min_idx = NP.argmin(NP.absolute(self.spl_k))
+        spl_k_shifted = NP.roll(self.spl_k, min_idx)     
+        
+        indices = detect_peaks(spl_k_shifted, mph=1.0, mpd=10)
+        num_protrusions = len(indices)
+        
+        indices = detect_peaks(spl_k_shifted, mph=1.0, mpd=10, valley=True)
+        num_indentations = len(indices)
+        
+        global_max_curvature = max(self.spl_k)
+        global_min_curvature = min(self.spl_k)
 
-        localmax = argrelextrema(self.spl_k, NP.greater)[0]
-        localmin = argrelextrema(self.spl_k, NP.less)[0]
-        num_extrema = len(localmax) + len(localmin)
-
-        posk = [n for n in self.spl_k if n > 0]
-        negk = [n for n in self.spl_k if n < 0]
-
-        # Calculate the max/min positive and negative curvatures
-        if posk:
-            maxpos = max([n for n in self.spl_k if n > 0])
-            minpos = min([n for n in self.spl_k if n > 0])
-        else:
-            maxpos = 0
-            minpos = 0
-
-        if negk:
-            maxneg = max([n for n in self.spl_k if n < 0])
-            minneg = min([n for n in self.spl_k if n < 0])
-        else:
-            maxneg = 0
-            minneg = 0
-
-        self.bdy_fvector = [maxpos, minpos, maxneg, minneg, num_extrema, num_signchange]
+        self.bdy_fvector = [mean_curvature, std_dev_curvature, num_protrusions, num_indentations, global_max_curvature, global_min_curvature]
 
         # Perimeter: 1 sqrt2 (function from regionprops)
         props = skimage.measure.regionprops(self.cell_img)
